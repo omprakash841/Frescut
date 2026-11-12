@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">FRESCUT</string>
+    <string name="search_hint">Search for \'Chicken, Fish, Mutton…</string>
+    <string name="delivery_in">Delivery in</string>
+    <string name="delivery_time_30_min">30 min ⚡</string>
+    <string name="frescut_pro">FRESCUT Pro</string>
+    <string name="our_current_hits">Our Current Hits</string>
+    <string name="current_hits_subtitle">Here’s what everyone’s eating!</string>
+    <string name="cravings_on_budget">Cravings on a Budget</string>
+    <string name="cravings_subtitle">Everyday fresh cuts under ₹299</string>
+    <string name="shop_by_category">Shop by Category</string>
+    <string name="shop_by_category_subtitle">Freshest meats and much more!</string>
+    <string name="crafted_for_recipes">Crafted for Your Recipes</string>
+    <string name="crafted_recipes_subtitle">Chef-selected cuts for iconic dishes</string>
+    <string name="customer_reviews">Customer Reviews</string>
+    <string name="customer_reviews_subtitle">Trusted by 50,000+ meat lovers daily</string>
+    <string name="view_all">View All</string>
+    <string name="view_cart">View Cart</string>
+    <string name="my_orders">My Orders</string>
+    <string name="order_details">Order Details</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_categories">Categories</string>
+    <string name="nav_orders">Orders</string>
+    <string name="nav_profile">Profile</string>
+</resources>
