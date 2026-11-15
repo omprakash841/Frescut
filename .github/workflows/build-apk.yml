@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
+      - master
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -32,8 +36,19 @@ jobs:
             yes | sdkmanager --licenses || true
           fi
 
-      - name: Prepare Debug Keystore
+      - name: Prepare Config & Debug Keystore
         run: |
+          # 1. Ensure .env.example and .env have safe non-empty placeholder values
+          if [ ! -f .env.example ]; then
+            echo "MAPS_API_KEY=MY_MAPS_API_KEY" > .env.example
+          else
+            sed -i 's/^\([A-Za-z0-9_]*\)=$/\1=DUMMY_VALUE/g' .env.example
+          fi
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
+          # 2. Ensure debug.keystore exists for signingConfig debugConfig
           if [ ! -f debug.keystore ]; then
             if [ -f debug.keystore.base64 ]; then
               base64 -d debug.keystore.base64 > debug.keystore
@@ -54,11 +69,68 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        env:
+          JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+          GRADLE_OPTS: -Dorg.gradle.daemon=false
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace --no-daemon --console=plain 2>&1 | tee build.log
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Write Failure Summary
+        if: failure()
+        run: |
+          {
+            echo "## ❌ Build Debug APK Failed"
+            echo ""
+            echo "### Failing Gradle Task"
+            echo '```'
+            grep -m 1 "Execution failed for task" build.log || echo "No 'Execution failed for task' line found in build.log"
+            echo '```'
+            echo ""
+            echo "### What went wrong (20 lines)"
+            echo '```'
+            grep -A 20 "What went wrong" build.log || tail -n 30 build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Debug APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: frescut-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Prepare APK and Release Notes
+        if: success()
+        id: release_meta
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk frescut-debug.apk
+          COMMIT_MSG=$(git log -1 --pretty=%B | tr '\n' ' ')
+          BUILD_DATE=$(TZ='Asia/Kolkata' date '+%d %b %Y, %I:%M %p IST')
+          {
+            echo "body<<EOF"
+            echo "**Commit:** ${COMMIT_MSG}"
+            echo "**Build Date:** ${BUILD_DATE}"
+            echo "**Commit SHA:** ${GITHUB_SHA}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or Update Latest Pre-Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Debug APK
+          body: ${{ steps.release_meta.outputs.body }}
+          prerelease: true
+          files: frescut-debug.apk
+          overwrite_files: true
