@@ -22,7 +22,8 @@ data class ProductEntity(
     val isCurrentHit: Boolean = false,
     val isBudgetPick: Boolean = false,
     val isFlashDelivery: Boolean = true,
-    val rating: Float = 4.8f,
+    val rating: Float = 0f,
+    val reviewCount: Int = 0,
     val proteinGrams: Int = 24,
     val isFavorite: Boolean = false,
     val pricePerKg: Int = 0,
@@ -84,6 +85,12 @@ data class AddressEntity(
     val label: String,
     val areaName: String,
     val fullAddress: String,
+    val houseNumber: String = "",
+    val floor: String = "",
+    val landmark: String = "",
+    val receiverPhone: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val deliveryMins: Int = 30,
     val isSelected: Boolean = false
 )
@@ -136,16 +143,34 @@ data class OrderDomainModel(
     val orderId: String,
     val status: String,
     val placedAtText: String,
-    val etaText: String,
+    val etaText: String? = null,
     val itemTotal: Int,
     val deliveryFee: Int,
     val packagingCharge: Int,
     val totalAmount: Int,
-    val rating: Float,
+    val rating: Float? = null,
     val items: List<OrderLineItem>,
-    val timelineTimes: List<String>
+    val timelineTimes: List<String>,
+    val address: String = "",
+    val houseNumber: String = "",
+    val floor: String = "",
+    val landmark: String = "",
+    val receiverPhone: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val deliveryInstructions: String = "",
+    val paymentMethod: String = "",
+    val deliveryPartner: String? = null,
+    val chillerTemp: String? = null,
+    val route: String? = null,
+    val createdAtMillis: Long = 0L
 ) {
     val totalItemsCount: Int get() = items.sumOf { it.quantity }
+    val hasLiveTrackingData: Boolean
+        get() = !etaText.isNullOrBlank() ||
+            !deliveryPartner.isNullOrBlank() ||
+            !chillerTemp.isNullOrBlank() ||
+            !route.isNullOrBlank()
 }
 
 data class CategoryCardModel(
@@ -161,35 +186,42 @@ data class CategoryCardModel(
 data class PromotionalBannerModel(
     val id: String,
     val title: String,
-    val highlights: List<String>,
-    val ctaText: String,
-    val targetCategory: String,
+    val subtitle: String = "",
+    val highlights: List<String> = emptyList(),
+    val ctaText: String = "Order Now",
+    val targetCategory: String = "Chicken",
     val imageRes: Int,
-    val tagText: String? = null
+    val tagText: String? = null,
+    val active: Boolean = true,
+    val order: Int = 0
 )
 
 data class RecipeCardModel(
     val id: String,
     val title: String,
-    val subtitle: String,
-    val prepTime: String,
-    val difficulty: String,
-    val calories: String,
+    val subtitle: String = "",
+    val prepTime: String = "",
+    val difficulty: String = "",
+    val calories: String = "",
     val imageRes: Int,
-    val primaryProductId: String,
-    val cutName: String,
-    val cutPrice: Int,
-    val steps: List<String>
+    val primaryProductId: String = "",
+    val cutName: String = "",
+    val cutPrice: Int = 0,
+    val steps: List<String> = emptyList(),
+    val active: Boolean = true,
+    val order: Int = 0
 )
 
 data class CustomerReviewModel(
     val id: String,
     val customerName: String,
-    val location: String,
-    val rating: Float,
-    val orderedCut: String,
+    val location: String = "",
+    val rating: Float = 5.0f,
+    val orderedCut: String = "",
     val reviewText: String,
-    val verifiedDate: String
+    val verifiedDate: String = "",
+    val active: Boolean = true,
+    val order: Int = 0
 )
 
 data class CouponOfferModel(
@@ -198,5 +230,31 @@ data class CouponOfferModel(
     val subtitle: String,
     val discountPercent: Int,
     val maxDiscount: Int,
-    val minOrderValue: Int
+    val minOrderValue: Int,
+    val active: Boolean = true
 )
+
+data class AppConfigModel(
+    val referralCode: String = "",
+    val searchChips: List<String> = emptyList(),
+    val storeName: String = "FRESCUT",
+    val supportPhone: String = "",
+    val minOrderAmount: Int = 0,
+    val deliveryTimeText: String = "",
+    val deliveryFee: Int? = null,
+    val handlingFee: Int? = null,
+    val storeLatitude: Double = 0.0,
+    val storeLongitude: Double = 0.0,
+    val deliveryRadiusKm: Double = 0.0
+)
+
+data class QuickNavCategoryItem(
+    val id: String,
+    val label: String,
+    val imageRes: Int? = null,
+    val isAllTab: Boolean = false,
+    val isMoreTab: Boolean = false,
+    val order: Int = 0
+)
+
+

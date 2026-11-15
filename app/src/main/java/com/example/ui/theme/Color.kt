@@ -22,12 +22,36 @@ val FrescutOrangeBg = Color(0xFFFEF3C7)
 
 val FrescutCreamRatingBg = Color(0xFFFFFBEB)
 
-// Neutrals
+// Order Status Chip Colors (Amber, Blue, Red, Green, Grey)
+val StatusAmberBg = Color(0xFFFEF3C7)
+val StatusAmberText = Color(0xFFB45309)
+val StatusAmberBar = Color(0xFFD97706)
+
+val StatusBlueBg = Color(0xFFDBEAFE)
+val StatusBlueText = Color(0xFF1D4ED8)
+val StatusBlueBar = Color(0xFF2563EB)
+
+val StatusRedBg = Color(0xFFFFF0F1)
+val StatusRedText = Color(0xFFC8101E)
+val StatusRedBar = Color(0xFFC8101E)
+
+val StatusGreenBg = Color(0xFFDCFCE7)
+val StatusGreenText = Color(0xFF15803D)
+val StatusGreenBar = Color(0xFF16A34A)
+
+val StatusGreyBg = Color(0xFFF3F4F6)
+val StatusGreyText = Color(0xFF4B5563)
+val StatusGreyBar = Color(0xFF6B7280)
+
+// Neutrals & Common Outline / Divider Tokens
 val FrescutWhite = Color(0xFFFFFFFF)
 val FrescutSurface = Color(0xFFF9FAFB)
+val FrescutSectionDividerBg = Color(0xFFF5F5F5)
 val FrescutCardBg = Color(0xFFFFFFFF)
-val FrescutBorderLight = Color(0xFFE5E7EB)
-val FrescutDivider = Color(0xFFF1F5F9)
+val FrescutBorderLight = Color(0xFFE0E0E0)
+val FrescutFocusRed = Color(0xFFC8101E)
+val FrescutSelectedPinkBg = Color(0xFFFFF0F1)
+val FrescutDivider = Color(0xFFE0E0E0)
 val FrescutTextPrimary = Color(0xFF111827)
 val FrescutTextSecondary = Color(0xFF6B7280)
 val FrescutTextMuted = Color(0xFF9CA3AF)

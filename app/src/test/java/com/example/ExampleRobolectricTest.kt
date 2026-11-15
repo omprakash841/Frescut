@@ -27,6 +27,14 @@ class ExampleRobolectricTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
+    private fun ensureLoggedInToHome() {
+        composeTestRule.waitForIdle()
+        if (composeTestRule.onAllNodesWithTag("continue_as_guest_button").fetchSemanticsNodes().isNotEmpty()) {
+            composeTestRule.onNodeWithTag("continue_as_guest_button").performClick()
+            composeTestRule.waitForIdle()
+        }
+    }
+
     @Test
     fun `verify automatic quantity formula and 192g example`() {
         // Prompt specification example: Product price ₹260/kg, Selected budget ₹50 -> ~192 grams
@@ -38,7 +46,7 @@ class ExampleRobolectricTest {
     fun `verify chicken starts at 50, increments by 10, shows 3 recommendations at 100, and updates cart`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("FRESCUT", context.getString(R.string.app_name))
-        composeTestRule.waitForIdle()
+        ensureLoggedInToHome()
 
         // 1. Open Chicken Breast Boneless product detail
         composeTestRule.onNodeWithTag("product_card_prod_chicken_breast").performClick()
@@ -79,7 +87,7 @@ class ExampleRobolectricTest {
 
     @Test
     fun `verify mutton starts at 100 and shows 3 recommendations immediately`() {
-        composeTestRule.waitForIdle()
+        ensureLoggedInToHome()
 
         // 2. Open Mutton Curry Cut product detail
         composeTestRule.onNodeWithTag("product_card_prod_mutton_curry").performClick()
@@ -102,7 +110,7 @@ class ExampleRobolectricTest {
 
     @Test
     fun `verify smart bottom navigation hides on scroll down and shows on scroll up`() {
-        composeTestRule.waitForIdle()
+        ensureLoggedInToHome()
 
         // 9. Navigation stays visible at the top of the page
         composeTestRule.onNodeWithTag("bottom_nav_home").assertIsDisplayed()
@@ -123,13 +131,9 @@ class ExampleRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("bottom_nav_home").assertIsDisplayed()
 
-        // 12. Existing navigation to Categories, Orders, Profile, and Admin Dashboard works
+        // 12. Existing navigation to Categories, Orders, and Customer Profile works
         composeTestRule.onNodeWithTag("bottom_nav_profile").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("profile_screen").assertIsDisplayed()
-
-        composeTestRule.onNodeWithTag("profile_menu_admin_dashboard").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("admin_dashboard_screen").assertIsDisplayed()
     }
 }

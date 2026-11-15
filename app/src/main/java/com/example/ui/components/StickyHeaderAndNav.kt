@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
@@ -85,35 +86,24 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.QuickNavCategoryItem
+import com.example.data.SeedData
 import com.example.ui.MainNavTab
 import com.example.ui.theme.FrescutBorderLight
+import com.example.ui.theme.FrescutFocusRed
 import com.example.ui.theme.FrescutGold
 import com.example.ui.theme.FrescutRedBright
 import com.example.ui.theme.FrescutRedDark
 import com.example.ui.theme.FrescutRedLightBg
 import com.example.ui.theme.FrescutRedPrimary
 import com.example.ui.theme.FrescutRedSoftBorder
+import com.example.ui.theme.FrescutSelectedTabUnderline
 import com.example.ui.theme.FrescutTextPrimary
 import com.example.ui.theme.FrescutTextSecondary
+import com.example.ui.theme.FrescutThinDivider
 import com.example.ui.theme.FrescutWhite
+import kotlinx.coroutines.delay
 import kotlin.math.abs
-
-data class QuickNavCategoryItem(
-    val id: String,
-    val label: String,
-    val imageRes: Int? = null,
-    val isAllTab: Boolean = false,
-    val isMoreTab: Boolean = false
-)
-
-val homeQuickCategories = listOf(
-    QuickNavCategoryItem(id = "All", label = "All", isAllTab = true),
-    QuickNavCategoryItem(id = "Chicken", label = "Chicken", imageRes = R.drawable.img_cat_chicken),
-    QuickNavCategoryItem(id = "Mutton", label = "Mutton", imageRes = R.drawable.img_cat_mutton),
-    QuickNavCategoryItem(id = "Fish", label = "Fish", imageRes = R.drawable.img_cat_fish),
-    QuickNavCategoryItem(id = "Eggs", label = "Eggs", imageRes = R.drawable.img_cat_eggs),
-    QuickNavCategoryItem(id = "More", label = "More", isMoreTab = true)
-)
 
 /**
  * Tracks LazyListState scroll position & direction with threshold filtering to control
@@ -226,8 +216,44 @@ fun FrescutStickyHeader(
     onNotificationClick: () -> Unit,
     onSearchBarClick: () -> Unit,
     onCategorySelect: (String) -> Unit,
+    cartCount: Int = 0,
+    onCartClick: () -> Unit = {},
+    searchPlaceholders: List<String> = emptyList(),
+    quickCategories: List<QuickNavCategoryItem> = SeedData.defaultQuickCategories,
     modifier: Modifier = Modifier
 ) {
+    val activePlaceholderNames = remember(searchPlaceholders) {
+        val rawList = if (searchPlaceholders.isNotEmpty()) {
+            searchPlaceholders
+        } else {
+            SeedData.defaultSearchPlaceholders
+        }
+        rawList.mapNotNull { term ->
+            val cleaned = term.trim()
+                .removePrefix("Search for")
+                .removePrefix("search for")
+                .removeSuffix("...")
+                .trim()
+            cleaned.takeIf { it.isNotEmpty() }
+        }.ifEmpty { SeedData.defaultSearchPlaceholders }
+    }
+
+    var placeholderIndex by remember(activePlaceholderNames) { mutableIntStateOf(0) }
+
+    LaunchedEffect(activePlaceholderNames) {
+        if (activePlaceholderNames.size > 1) {
+            while (true) {
+                delay(2500L)
+                placeholderIndex = (placeholderIndex + 1) % activePlaceholderNames.size
+            }
+        }
+    }
+
+    val currentPlaceholderName = activePlaceholderNames.getOrElse(placeholderIndex) { "Chicken" }
+    val categoriesToDisplay = remember(quickCategories) {
+        if (quickCategories.isNotEmpty()) quickCategories else SeedData.defaultQuickCategories
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -261,7 +287,7 @@ fun FrescutStickyHeader(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Location & Delivery Info
+                            // Location & Delivery Info (kept as-is, without vertical "|" divider)
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -322,14 +348,7 @@ fun FrescutStickyHeader(
                                 }
                             }
 
-                            // Thin vertical divider
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .width(1.dp)
-                                    .height(26.dp)
-                                    .background(FrescutWhite.copy(alpha = 0.25f))
-                            )
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             // FRESCUT Pro Pill Button
                             Row(
@@ -404,21 +423,62 @@ fun FrescutStickyHeader(
                                     )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Cart Icon with Item Count Badge (hidden when cart is empty)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable(onClick = onCartClick)
+                                    .testTag("header_cart_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ShoppingCart,
+                                    contentDescription = "Cart",
+                                    tint = FrescutWhite,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                if (cartCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = (-1).dp, y = 1.dp)
+                                            .size(17.dp)
+                                            .clip(CircleShape)
+                                            .background(FrescutGold)
+                                            .testTag("header_cart_badge"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = cartCount.toString(),
+                                            color = FrescutTextPrimary,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // Sticky White Search Bar (NEVER disappears on scroll)
+                // Sticky White Rounded-Rectangle Search Bar (1dp grey border, 12dp corners, zero shadow)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(50))
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, FrescutBorderLight, RoundedCornerShape(12.dp))
                         .clickable(onClick = onSearchBarClick)
                         .testTag("sticky_search_bar"),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(12.dp),
                     color = FrescutWhite,
-                    shadowElevation = 2.dp
+                    shadowElevation = 0.dp
                 ) {
                     Row(
                         modifier = Modifier
@@ -433,21 +493,55 @@ fun FrescutStickyHeader(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = if (searchQuery.isBlank()) {
-                                "Search for ‘Chicken, Fish, Mutton..."
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (searchQuery.isBlank()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Search for ",
+                                        color = FrescutTextSecondary,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Normal
+                                        ),
+                                        maxLines = 1
+                                    )
+                                    AnimatedContent(
+                                        targetState = "$currentPlaceholderName...",
+                                        transitionSpec = {
+                                            fadeIn(animationSpec = tween(420)) togetherWith
+                                                fadeOut(animationSpec = tween(420))
+                                        },
+                                        label = "SearchBarPlaceholderNameFade"
+                                    ) { animatedName ->
+                                        Text(
+                                            text = animatedName,
+                                            color = FrescutTextSecondary,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Normal
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.testTag("search_bar_animated_placeholder")
+                                        )
+                                    }
+                                }
                             } else {
-                                searchQuery
-                            },
-                            color = if (searchQuery.isBlank()) FrescutTextSecondary else FrescutTextPrimary,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 13.5.sp,
-                                fontWeight = if (searchQuery.isBlank()) FontWeight.Normal else FontWeight.SemiBold
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
+                                Text(
+                                    text = searchQuery,
+                                    color = FrescutTextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                         Icon(
                             imageVector = Icons.Filled.Mic,
                             contentDescription = "Voice Search",
@@ -459,7 +553,10 @@ fun FrescutStickyHeader(
             }
         }
 
-        // Sticky Horizontal Category Navigation directly below the search bar
+        // Full-width 1dp light grey (#E0E0E0) line below the search bar block on Home and Categories
+        FrescutThinDivider()
+
+        // Sticky Horizontal Category Navigation directly below the search bar (populated from Firestore "categories")
         if (showCategoryBar) {
             AnimatedContent(
                 targetState = isScrolled,
@@ -469,71 +566,87 @@ fun FrescutStickyHeader(
                 label = "StickyCategoryBarTransition"
             ) { compactMode ->
                 if (!compactMode) {
-                    // Expanded Top Category Strip with Photos/Icons (Initial View)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(FrescutWhite)
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        homeQuickCategories.forEach { item ->
-                            val isSelected = selectedCategory.equals(item.id, ignoreCase = true)
-                            ExpandedCategoryNavTab(
-                                item = item,
-                                isSelected = isSelected,
-                                onClick = { onCategorySelect(item.id) }
-                            )
-                        }
-                    }
-                } else {
-                    // Compact Sticky Text Category Tabs on Scroll
+                    // Expanded Top Category Strip with Photos/Icons + 2dp Red Underline on Selected Tab + 1dp Bottom Grey Line
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(FrescutWhite)
-                            .shadow(elevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(FrescutWhite)
+                                .horizontalScroll(rememberScrollState())
+                                .padding(start = 12.dp, end = 12.dp, top = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            categoriesToDisplay.forEach { item ->
+                                val isSelected = selectedCategory.equals(item.id, ignoreCase = true)
+                                ExpandedCategoryNavTab(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    onClick = { onCategorySelect(item.id) }
+                                )
+                            }
+                        }
+                        FrescutThinDivider()
+                    }
+                } else {
+                    // Compact Sticky Text Category Tabs on Scroll + 2dp Red Underline on Selected Tab + 1dp Bottom Grey Line
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(FrescutWhite)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(22.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(start = 12.dp, end = 12.dp, top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Bottom
                         ) {
-                            homeQuickCategories.forEach { item ->
+                            categoriesToDisplay.forEach { item ->
                                 val isSelected = selectedCategory.equals(item.id, ignoreCase = true)
                                 Column(
-                                    modifier = Modifier
-                                        .clickable { onCategorySelect(item.id) }
-                                        .testTag("compact_cat_tab_${item.id.lowercase()}")
-                                        .padding(top = 8.dp),
+                                    modifier = Modifier.width(74.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(
-                                        text = item.label,
-                                        color = if (isSelected) FrescutRedBright else FrescutTextPrimary,
-                                        style = MaterialTheme.typography.titleSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.5.sp
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
                                     Box(
                                         modifier = Modifier
-                                            .width(28.dp)
-                                            .height(3.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(
-                                                if (isSelected) FrescutRedBright else Color.Transparent
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) FrescutRedLightBg else FrescutWhite)
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isSelected) FrescutFocusRed else FrescutBorderLight,
+                                                shape = RoundedCornerShape(12.dp)
                                             )
-                                    )
+                                            .clickable { onCategorySelect(item.id) }
+                                            .testTag("compact_cat_tab_${item.id.lowercase()}")
+                                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = item.label,
+                                            color = if (isSelected) FrescutFocusRed else FrescutTextPrimary,
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                                fontSize = 11.5.sp,
+                                                lineHeight = 13.5.sp
+                                            ),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(5.dp))
+                                    FrescutSelectedTabUnderline(isSelected = isSelected)
                                 }
                             }
                         }
+                        FrescutThinDivider()
                     }
                 }
             }
@@ -548,87 +661,90 @@ private fun ExpandedCategoryNavTab(
     onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .width(56.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) FrescutRedLightBg else Color.Transparent)
-            .border(
-                width = if (isSelected) 1.dp else 0.dp,
-                color = if (isSelected) FrescutRedSoftBorder else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable(onClick = onClick)
-            .testTag("expanded_cat_tab_${item.id.lowercase()}")
-            .padding(top = 6.dp, bottom = 4.dp, start = 4.dp, end = 4.dp),
+        modifier = Modifier.width(74.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier.size(36.dp),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isSelected) FrescutRedLightBg else FrescutWhite)
+                .border(
+                    width = 1.dp,
+                    color = if (isSelected) FrescutFocusRed else FrescutBorderLight,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .clickable(onClick = onClick)
+                .testTag("expanded_cat_tab_${item.id.lowercase()}")
+                .padding(top = 6.dp, bottom = 6.dp, start = 4.dp, end = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            when {
-                item.isAllTab -> {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(FrescutRedBright.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Restaurant,
-                            contentDescription = "All",
-                            tint = FrescutRedBright,
-                            modifier = Modifier.size(18.dp)
+            Box(
+                modifier = Modifier.size(36.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    item.isAllTab -> {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(FrescutRedBright.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Restaurant,
+                                contentDescription = item.label,
+                                tint = FrescutRedBright,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    item.isMoreTab -> {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFF3F4F6)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.GridView,
+                                contentDescription = item.label,
+                                tint = FrescutTextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    item.imageRes != null -> {
+                        Image(
+                            painter = painterResource(id = item.imageRes),
+                            contentDescription = item.label,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
                         )
                     }
-                }
-                item.isMoreTab -> {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFF3F4F6)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.GridView,
-                            contentDescription = "More Categories",
-                            tint = FrescutTextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                item.imageRes != null -> {
-                    Image(
-                        painter = painterResource(id = item.imageRes),
-                        contentDescription = item.label,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
                 }
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = item.label,
+                color = if (isSelected) FrescutFocusRed else FrescutTextPrimary,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp
+                ),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 2,
+                minLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = item.label,
-            color = if (isSelected) FrescutRedBright else FrescutTextPrimary,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.5.sp
-            ),
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(3.dp))
-        Box(
-            modifier = Modifier
-                .width(24.dp)
-                .height(2.5.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isSelected) FrescutRedBright else Color.Transparent)
-        )
+        Spacer(modifier = Modifier.height(6.dp))
+        FrescutSelectedTabUnderline(isSelected = isSelected)
     }
 }
 
@@ -651,9 +767,9 @@ fun StickyCartSummaryBar(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 6.dp)
                 .testTag("sticky_cart_bar"),
-            shape = RoundedCornerShape(16.dp),
-            color = FrescutRedBright,
-            shadowElevation = 8.dp
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFFC8101E),
+            shadowElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
@@ -681,7 +797,7 @@ fun StickyCartSummaryBar(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "$itemCount ${if (itemCount == 1) "Item" else "Items"} • ₹$totalAmount",
+                            text = "$itemCount ${if (itemCount == 1) "item" else "items"} • ₹$totalAmount",
                             color = FrescutWhite,
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.ExtraBold,
@@ -703,14 +819,14 @@ fun StickyCartSummaryBar(
 
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(FrescutWhite)
                         .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "View Cart",
-                        color = FrescutRedBright,
+                        color = Color(0xFFC8101E),
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
@@ -720,7 +836,7 @@ fun StickyCartSummaryBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,
-                        tint = FrescutRedBright,
+                        tint = Color(0xFFC8101E),
                         modifier = Modifier.size(15.dp)
                     )
                 }
@@ -730,11 +846,11 @@ fun StickyCartSummaryBar(
 }
 
 /**
- * Smart Bottom Navigation Bar:
- * - Smoothly slides down (translateY(100%)) and collapses height on downward scroll (280ms ease-in-out)
- *   so no empty gap is left where the navigation was.
- * - Smoothly slides up (translateY(0)) on upward scroll or when at top of page / tab selected.
- * - Respects Android system navigation bar safe-area spacing.
+ * Bottom Navigation Bar separated cleanly from page content:
+ * 1. 1dp light grey (#E0E0E0) border-top at the top edge.
+ * 2. Very subtle upward shadow (< 4dp, 2dp).
+ * 3. White background, straight corners, extending edge-to-edge to the bottom of the screen.
+ * 4. Selected tab in red pill, other tabs in grey.
  */
 @Composable
 fun FrescutBottomNavigationBar(
@@ -761,35 +877,34 @@ fun FrescutBottomNavigationBar(
         ) + fadeOut(animationSpec = tween(durationMillis = 200)),
         modifier = modifier.testTag("smart_bottom_nav_container")
     ) {
-        Box(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .shadow(
+                    elevation = 2.dp,
+                    shape = androidx.compose.ui.graphics.RectangleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.08f),
+                    spotColor = Color.Black.copy(alpha = 0.10f)
+                ),
+            shape = androidx.compose.ui.graphics.RectangleShape,
+            color = FrescutWhite,
+            shadowElevation = 2.dp,
+            tonalElevation = 0.dp
         ) {
-            Surface(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(62.dp)
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = RoundedCornerShape(32.dp),
-                        ambientColor = Color.Black.copy(alpha = 0.14f),
-                        spotColor = Color.Black.copy(alpha = 0.16f)
-                    ),
-                shape = RoundedCornerShape(32.dp),
-                color = FrescutWhite,
-                tonalElevation = 0.dp
+                    .background(FrescutWhite)
+                    .navigationBarsPadding()
             ) {
+                // 1dp light grey (#E0E0E0) top border using common divider component
+                FrescutThinDivider()
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(
-                            width = 1.dp,
-                            color = FrescutBorderLight.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(32.dp)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .height(62.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -812,8 +927,8 @@ fun FrescutBottomNavigationBar(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(if (isSelected) FrescutRedBright else Color.Transparent)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (isSelected) Color(0xFFC8101E) else Color.Transparent)
                                 .clickable { onTabSelected(tab) }
                                 .testTag("bottom_nav_${tab.name.lowercase()}"),
                             contentAlignment = Alignment.Center
@@ -825,15 +940,15 @@ fun FrescutBottomNavigationBar(
                                 Icon(
                                     imageVector = if (isSelected) activeIcon else inactiveIcon,
                                     contentDescription = tab.label,
-                                    tint = if (isSelected) FrescutWhite else FrescutTextPrimary,
-                                    modifier = Modifier.size(21.dp)
+                                    tint = if (isSelected) FrescutWhite else FrescutTextSecondary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = tab.label,
-                                    color = if (isSelected) FrescutWhite else FrescutTextPrimary,
+                                    color = if (isSelected) FrescutWhite else FrescutTextSecondary,
                                     style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         fontSize = 11.sp
                                     )
                                 )

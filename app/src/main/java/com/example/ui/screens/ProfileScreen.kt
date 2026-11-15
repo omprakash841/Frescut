@@ -37,7 +37,6 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -66,21 +65,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AddressEntity
-import com.example.data.CategoryBudgetConfigEntity
 import com.example.data.CouponOfferModel
-import com.example.data.ProductEntity
-import com.example.data.RecommendationConfigEntity
-import com.example.data.SeedData
 import com.example.ui.ProfileSubpage
 import com.example.ui.components.ObserveSmartBottomNavScroll
 import com.example.ui.theme.FrescutBorderLight
 import com.example.ui.theme.FrescutDivider
+import com.example.ui.theme.FrescutFocusRed
 import com.example.ui.theme.FrescutGreenDiscount
+import com.example.ui.theme.FrescutLabeledInputField
+import com.example.ui.theme.FrescutOutlineChip
+import com.example.ui.theme.FrescutOutlineShape
+import com.example.ui.theme.FrescutPaymentOptionCard
+import com.example.ui.theme.FrescutPrimaryButton
 import com.example.ui.theme.FrescutRedBright
 import com.example.ui.theme.FrescutRedLightBg
+import com.example.ui.theme.FrescutSelectedPinkBg
 import com.example.ui.theme.FrescutSurface
 import com.example.ui.theme.FrescutTextPrimary
 import com.example.ui.theme.FrescutTextSecondary
+import com.example.ui.theme.FrescutThinDivider
 import com.example.ui.theme.FrescutWhite
 
 private data class ProfileMenuRowItem(
@@ -99,9 +102,8 @@ fun ProfileScreen(
     isProMember: Boolean,
     selectedPaymentMethod: String,
     addresses: List<AddressEntity>,
-    categoryBudgetConfigs: List<CategoryBudgetConfigEntity>,
-    recommendationConfig: RecommendationConfigEntity,
-    products: List<ProductEntity>,
+    activeCoupons: List<CouponOfferModel> = emptyList(),
+    referralCode: String = "",
     activeSubpage: ProfileSubpage?,
     onOpenSubpage: (ProfileSubpage?) -> Unit,
     onUpdateProfile: (String, String, String) -> Unit,
@@ -110,9 +112,6 @@ fun ProfileScreen(
     onTogglePro: () -> Unit,
     onSelectPaymentMethod: (String) -> Unit,
     onApplyCoupon: (String) -> Unit,
-    onSaveCategoryBudgetConfig: (String, Int, Int) -> Unit,
-    onSaveRecommendationConfig: (RecommendationConfigEntity) -> Unit,
-    onSaveProductBudgetSettings: (String, Int, Boolean) -> Unit,
     onLogoutConfirmed: () -> Unit,
     onBottomNavVisibilityChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
@@ -126,20 +125,6 @@ fun ProfileScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
-    if (activeSubpage == ProfileSubpage.ADMIN_DASHBOARD) {
-        AdminDashboardScreen(
-            categoryConfigs = categoryBudgetConfigs,
-            recommendationConfig = recommendationConfig,
-            products = products,
-            onBack = { onOpenSubpage(null) },
-            onSaveCategoryConfig = onSaveCategoryBudgetConfig,
-            onSaveRecommendationConfig = onSaveRecommendationConfig,
-            onSaveProductBudgetSettings = onSaveProductBudgetSettings,
-            modifier = modifier
-        )
-        return
-    }
-
     if (activeSubpage != null) {
         BackHandler { onOpenSubpage(null) }
         ProfileSubpageView(
@@ -147,6 +132,8 @@ fun ProfileScreen(
             isProMember = isProMember,
             selectedPaymentMethod = selectedPaymentMethod,
             addresses = addresses,
+            activeCoupons = activeCoupons,
+            referralCode = referralCode,
             onBack = { onOpenSubpage(null) },
             onSelectAddress = onSelectAddress,
             onAddAddress = onAddAddress,
@@ -158,18 +145,16 @@ fun ProfileScreen(
         return
     }
 
-    val menuItems = remember(addresses.size, isProMember, selectedPaymentMethod) {
+    val menuItems = remember(addresses.size, isProMember, selectedPaymentMethod, activeCoupons.size, referralCode) {
         listOf(
-            ProfileMenuRowItem(
-                subpage = ProfileSubpage.ADMIN_DASHBOARD,
-                title = "Admin Dashboard",
-                subtitle = "Configure category minimum budgets, increments & ₹/kg pricing",
-                icon = Icons.Outlined.Tune
-            ),
             ProfileMenuRowItem(
                 subpage = ProfileSubpage.MY_ADDRESSES,
                 title = "My Addresses",
-                subtitle = "${addresses.size} saved delivery addresses",
+                subtitle = when (addresses.size) {
+                    0 -> "No saved delivery addresses"
+                    1 -> "1 saved delivery address"
+                    else -> "${addresses.size} saved delivery addresses"
+                },
                 icon = Icons.Outlined.LocationOn
             ),
             ProfileMenuRowItem(
@@ -180,20 +165,24 @@ fun ProfileScreen(
             ),
             ProfileMenuRowItem(
                 subpage = ProfileSubpage.FRESCUT_PRO,
-                title = "FRESCUT Pro",
-                subtitle = if (isProMember) "Active • Free 30-min delivery unlocked" else "Join for unlimited free delivery",
+                title = "FRESCUT Plus",
+                subtitle = if (isProMember) "Active • Free delivery unlocked" else "Join for unlimited free delivery",
                 icon = Icons.Outlined.WorkspacePremium
             ),
             ProfileMenuRowItem(
                 subpage = ProfileSubpage.REFER_AND_EARN,
                 title = "Refer & Earn",
-                subtitle = "Invite friends & get ₹150 FRESCUT Cash",
+                subtitle = if (referralCode.isNotBlank()) "Code: $referralCode • Invite friends" else "Invite friends & earn rewards",
                 icon = Icons.Outlined.CardGiftcard
             ),
             ProfileMenuRowItem(
                 subpage = ProfileSubpage.COUPONS_AND_OFFERS,
                 title = "Coupons & Offers",
-                subtitle = "Extra 20% OFF with code FRESH20",
+                subtitle = when (activeCoupons.size) {
+                    0 -> "View active coupons"
+                    1 -> "1 active offer available"
+                    else -> "${activeCoupons.size} active offers available"
+                },
                 icon = Icons.Outlined.LocalOffer
             ),
             ProfileMenuRowItem(
@@ -225,7 +214,7 @@ fun ProfileScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .testTag("profile_screen")
     ) {
-        // Header
+        // Customer Profile Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -260,14 +249,14 @@ fun ProfileScreen(
             item(key = "profile_info_card") {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = FrescutOutlineShape,
                     colors = CardDefaults.cardColors(containerColor = FrescutWhite),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, FrescutBorderLight, RoundedCornerShape(16.dp))
+                            .border(1.dp, FrescutBorderLight, FrescutOutlineShape)
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -322,19 +311,23 @@ fun ProfileScreen(
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = userPhone,
-                                    color = FrescutTextSecondary,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium
+                                if (userPhone.isNotBlank()) {
+                                    Text(
+                                        text = userPhone,
+                                        color = FrescutTextSecondary,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     )
-                                )
-                                Text(
-                                    text = userEmail,
-                                    color = FrescutTextSecondary,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
-                                )
+                                }
+                                if (userEmail.isNotBlank()) {
+                                    Text(
+                                        text = userEmail,
+                                        color = FrescutTextSecondary,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
+                                    )
+                                }
                             }
                         }
 
@@ -356,14 +349,14 @@ fun ProfileScreen(
             item(key = "profile_menu_list_card") {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = FrescutOutlineShape,
                     colors = CardDefaults.cardColors(containerColor = FrescutWhite),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, FrescutBorderLight, RoundedCornerShape(16.dp))
+                            .border(1.dp, FrescutBorderLight, FrescutOutlineShape)
                     ) {
                         menuItems.forEachIndexed { index, item ->
                             Row(
@@ -428,10 +421,9 @@ fun ProfileScreen(
                             }
 
                             if (index < menuItems.lastIndex) {
-                                HorizontalDivider(
-                                    color = FrescutDivider,
-                                    thickness = 1.dp,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                FrescutThinDivider(
+                                    startIndent = 68.dp,
+                                    endIndent = 16.dp
                                 )
                             }
                         }
@@ -539,6 +531,8 @@ private fun ProfileSubpageView(
     isProMember: Boolean,
     selectedPaymentMethod: String,
     addresses: List<AddressEntity>,
+    activeCoupons: List<CouponOfferModel>,
+    referralCode: String,
     onBack: () -> Unit,
     onSelectAddress: (Int) -> Unit,
     onAddAddress: (String, String, String) -> Unit,
@@ -547,9 +541,9 @@ private fun ProfileSubpageView(
     onApplyCoupon: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showAddAddressForm by remember { mutableStateOf(false) }
+    var showAddAddressForm by remember(addresses.isEmpty()) { mutableStateOf(addresses.isEmpty()) }
     var newAddrLabel by remember { mutableStateOf("Home") }
-    var newAddrArea by remember { mutableStateOf("Udhepali, Bargarh") }
+    var newAddrArea by remember { mutableStateOf("") }
     var newAddrFull by remember { mutableStateOf("") }
 
     Column(
@@ -589,70 +583,65 @@ private fun ProfileSubpageView(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when (subpage) {
-                ProfileSubpage.ADMIN_DASHBOARD -> Unit
                 ProfileSubpage.MY_ADDRESSES -> {
+                    if (addresses.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No saved delivery addresses yet. Add your delivery address below.",
+                                color = FrescutTextSecondary,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
                     items(addresses, key = { it.id }) { addr ->
-                        Card(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onSelectAddress(addr.id) },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = FrescutWhite)
+                                .clip(FrescutOutlineShape)
+                                .background(if (addr.isSelected) FrescutSelectedPinkBg else FrescutWhite)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (addr.isSelected) FrescutFocusRed else FrescutBorderLight,
+                                    shape = FrescutOutlineShape
+                                )
+                                .clickable { onSelectAddress(addr.id) }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(
-                                        width = if (addr.isSelected) 1.5.dp else 1.dp,
-                                        color = if (addr.isSelected) FrescutRedBright else FrescutBorderLight,
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.Top,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "${addr.label} • ${addr.areaName}",
-                                            color = FrescutTextPrimary,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                        if (addr.isSelected) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "Default",
-                                                color = FrescutRedBright,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.ExtraBold
-                                                )
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = addr.fullAddress,
-                                        color = FrescutTextSecondary,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Express Delivery in ${addr.deliveryMins} min ⚡",
-                                        color = FrescutGreenDiscount,
-                                        style = MaterialTheme.typography.labelSmall.copy(
+                                        text = "${addr.label} • ${addr.areaName}",
+                                        color = FrescutTextPrimary,
+                                        style = MaterialTheme.typography.titleMedium.copy(
                                             fontWeight = FontWeight.Bold
                                         )
                                     )
+                                    if (addr.isSelected) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Default",
+                                            color = FrescutFocusRed,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        )
+                                    }
                                 }
-                                if (addr.isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.CheckCircle,
-                                        contentDescription = "Selected",
-                                        tint = FrescutRedBright
-                                    )
-                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = addr.fullAddress,
+                                    color = FrescutTextSecondary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (addr.isSelected) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = FrescutFocusRed
+                                )
                             }
                         }
                     }
@@ -662,58 +651,66 @@ private fun ProfileSubpageView(
                             OutlinedButton(
                                 onClick = { showAddAddressForm = true },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = FrescutOutlineShape
                             ) {
                                 Text("+ Add New Address", color = FrescutRedBright, fontWeight = FontWeight.Bold)
                             }
                         } else {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = FrescutSurface)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(FrescutOutlineShape)
+                                    .background(FrescutWhite)
+                                    .border(1.dp, FrescutBorderLight, FrescutOutlineShape)
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "New Delivery Address",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "New Delivery Address",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = "Save as",
+                                    color = FrescutTextSecondary,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
-                                    OutlinedTextField(
-                                        value = newAddrLabel,
-                                        onValueChange = { newAddrLabel = it },
-                                        label = { Text("Label (Home / Work)") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-                                    OutlinedTextField(
-                                        value = newAddrArea,
-                                        onValueChange = { newAddrArea = it },
-                                        label = { Text("Locality / Area") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-                                    OutlinedTextField(
-                                        value = newAddrFull,
-                                        onValueChange = { newAddrFull = it },
-                                        label = { Text("Complete Address & Landmark") },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    Button(
-                                        onClick = {
-                                            if (newAddrFull.isNotBlank()) {
-                                                onAddAddress(newAddrLabel, newAddrArea, newAddrFull)
-                                                showAddAddressForm = false
-                                                newAddrFull = ""
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = FrescutRedBright),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Save & Deliver Here", color = FrescutWhite)
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf("Home", "Work", "Other").forEach { tag ->
+                                        FrescutOutlineChip(
+                                            label = tag,
+                                            isSelected = newAddrLabel.equals(tag, ignoreCase = true),
+                                            onClick = { newAddrLabel = tag }
+                                        )
                                     }
                                 }
+                                FrescutLabeledInputField(
+                                    label = "Locality / Area *",
+                                    value = newAddrArea,
+                                    onValueChange = { newAddrArea = it },
+                                    placeholder = "e.g., Indiranagar, Koramangala"
+                                )
+                                FrescutLabeledInputField(
+                                    label = "Complete Address & Landmark *",
+                                    value = newAddrFull,
+                                    onValueChange = { newAddrFull = it },
+                                    placeholder = "House no., building name, street",
+                                    singleLine = false
+                                )
+                                FrescutPrimaryButton(
+                                    text = "Save Address",
+                                    onClick = {
+                                        if (newAddrArea.isNotBlank() && newAddrFull.isNotBlank()) {
+                                            onAddAddress(newAddrLabel, newAddrArea, newAddrFull)
+                                            showAddAddressForm = false
+                                            newAddrArea = ""
+                                            newAddrFull = ""
+                                        }
+                                    },
+                                    enabled = newAddrArea.isNotBlank() && newAddrFull.isNotBlank()
+                                )
                             }
                         }
                     }
@@ -721,40 +718,15 @@ private fun ProfileSubpageView(
 
                 ProfileSubpage.PAYMENT_METHODS -> {
                     val methods = listOf(
-                        "UPI (Google Pay / PhonePe)",
-                        "Credit / Debit Cards (Visa / Mastercard / RuPay)",
-                        "Netbanking (All Indian Banks)",
-                        "Cash / Pay on Delivery"
+                        "Cash on Delivery"
                     )
                     items(methods) { method ->
                         val isChosen = selectedPaymentMethod == method
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .border(
-                                    width = if (isChosen) 1.5.dp else 1.dp,
-                                    color = if (isChosen) FrescutRedBright else FrescutBorderLight,
-                                    shape = RoundedCornerShape(14.dp)
-                                )
-                                .clickable { onSelectPaymentMethod(method) }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = method,
-                                color = FrescutTextPrimary,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-                            if (isChosen) {
-                                Icon(
-                                    imageVector = Icons.Outlined.CheckCircle,
-                                    contentDescription = "Selected",
-                                    tint = FrescutRedBright
-                                )
-                            }
-                        }
+                        FrescutPaymentOptionCard(
+                            title = method,
+                            isSelected = isChosen,
+                            onClick = { onSelectPaymentMethod(method) }
+                        )
                     }
                 }
 
@@ -808,26 +780,34 @@ private fun ProfileSubpageView(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "Give ₹150, Get ₹150",
+                                text = "Refer & Earn",
                                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold)
                             )
-                            Text(
-                                text = "Share your referral code with friends in Bargarh. They get ₹150 off their first order, and you earn ₹150 FRESCUT Cash once their order is delivered!",
-                                color = FrescutTextSecondary,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(FrescutRedLightBg)
-                                    .padding(14.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            if (referralCode.isNotBlank()) {
                                 Text(
-                                    text = "Referral Code: FRESCUT150",
-                                    color = FrescutRedBright,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                                    text = "Share your referral code with friends to unlock referral rewards on delivered orders.",
+                                    color = FrescutTextSecondary,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(FrescutRedLightBg)
+                                        .padding(14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Referral Code: $referralCode",
+                                        color = FrescutRedBright,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "No referral code is currently configured in Firestore (collection: config).",
+                                    color = FrescutTextSecondary,
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
@@ -835,11 +815,21 @@ private fun ProfileSubpageView(
                 }
 
                 ProfileSubpage.COUPONS_AND_OFFERS -> {
-                    items(SeedData.coupons, key = { it.code }) { coupon ->
-                        CouponCardRow(
-                            coupon = coupon,
-                            onApply = { onApplyCoupon(coupon.code) }
-                        )
+                    if (activeCoupons.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No active coupons available right now.",
+                                color = FrescutTextSecondary,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        items(activeCoupons, key = { it.code }) { coupon ->
+                            CouponCardRow(
+                                coupon = coupon,
+                                onApply = { onApplyCoupon(coupon.code) }
+                            )
+                        }
                     }
                 }
 
@@ -910,7 +900,9 @@ private fun CouponCardRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, FrescutBorderLight, RoundedCornerShape(14.dp))
+            .clip(FrescutOutlineShape)
+            .background(FrescutWhite)
+            .border(1.dp, FrescutBorderLight, FrescutOutlineShape)
             .padding(14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

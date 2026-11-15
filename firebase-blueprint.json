@@ -1,0 +1,249 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Fresh meat, fish, or egg product in the FRESCUT catalog",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Product display name" },
+        "category": { "type": "string", "description": "Main category (Chicken, Mutton, Fish, Eggs, etc.)" },
+        "subcategory": { "type": "string", "description": "Subcategory filter tag" },
+        "pricePerKg": { "type": "integer", "description": "Price per kilogram in INR for budget calculations" },
+        "price": { "type": "integer", "description": "Standard pack price in INR" },
+        "originalPrice": { "type": "integer", "description": "Original MRP in INR" },
+        "discountPercent": { "type": "integer", "description": "Discount percentage" },
+        "deliveryTimeMins": { "type": "integer", "description": "Estimated delivery time in minutes" },
+        "image": { "type": "string", "description": "Drawable resource key for the product image" },
+        "available": { "type": "boolean", "description": "Whether the product is currently in stock and available" },
+        "weightInfo": { "type": "string", "description": "Standard pack weight label" },
+        "piecesInfo": { "type": "string", "description": "Piece count description" },
+        "servingsInfo": { "type": "string", "description": "Servings count description" },
+        "description": { "type": "string", "description": "Detailed product description" },
+        "isCurrentHit": { "type": "boolean", "description": "Featured on home Current Hits" },
+        "isBudgetPick": { "type": "boolean", "description": "Featured in Budget Picks" },
+        "isFlashDelivery": { "type": "boolean", "description": "Eligible for express flash delivery" },
+        "rating": { "type": "number", "description": "Average customer rating (0 to 5)" },
+        "proteinGrams": { "type": "integer", "description": "Protein content per 100g" },
+        "budgetSelectorEnabled": { "type": "boolean", "description": "Whether Smart Budget Selector is enabled" },
+        "ownerId": { "type": "string", "description": "UID of the catalog owner who seeded or manages this product" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update server timestamp" }
+      },
+      "required": [
+        "name", "category", "subcategory", "pricePerKg", "price", "originalPrice",
+        "discountPercent", "deliveryTimeMins", "image", "available", "weightInfo",
+        "piecesInfo", "servingsInfo", "description", "isCurrentHit", "isBudgetPick",
+        "isFlashDelivery", "rating", "proteinGrams", "budgetSelectorEnabled",
+        "ownerId", "createdAt", "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order saved in Cloud Firestore without fake or auto-progressed fields",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "description": "Human-readable order code (e.g. #FC12848)" },
+        "userId": { "type": "string", "description": "UID of the customer who placed the order" },
+        "items": { "type": "array", "description": "List of ordered line item maps" },
+        "total": { "type": "integer", "description": "Final payable amount in INR" },
+        "itemTotal": { "type": "integer", "description": "Subtotal of items in INR" },
+        "deliveryFee": { "type": "integer", "description": "Delivery fee in INR" },
+        "packagingCharge": { "type": "integer", "description": "Packaging fee in INR" },
+        "address": { "type": "string", "description": "Delivery address snapshot" },
+        "deliveryInstructions": { "type": "string", "description": "Customer delivery instructions" },
+        "paymentMethod": { "type": "string", "description": "Customer selected payment method" },
+        "status": {
+          "type": "string",
+          "enum": ["Order Placed", "Processing", "Packed", "Out for Delivery", "Delivered", "Cancelled"],
+          "description": "Live order status (starts at Order Placed; updated manually in Firestore)"
+        },
+        "time": { "type": "string", "description": "Formatted order placement time" },
+        "timelineTimes": { "type": "array", "description": "Step timestamps (only Order Placed filled on creation)" },
+        "rating": { "type": "number", "description": "Optional customer rating (1-5), saved only when customer rates" },
+        "etaText": { "type": "string", "description": "Optional live ETA text from Firestore" },
+        "deliveryPartner": { "type": "string", "description": "Optional delivery partner name from Firestore" },
+        "chillerTemp": { "type": "string", "description": "Optional chiller temperature reading from Firestore" },
+        "route": { "type": "string", "description": "Optional delivery route description from Firestore" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update server timestamp" }
+      },
+      "required": [
+        "orderNumber", "userId", "items", "total", "itemTotal", "deliveryFee",
+        "packagingCharge", "address", "deliveryInstructions", "paymentMethod",
+        "status", "time", "timelineTimes", "createdAt", "updatedAt"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated customer profile document",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Customer Firebase Auth UID" },
+        "name": { "type": "string", "description": "Customer full name" },
+        "email": { "type": "string", "description": "Customer email" },
+        "phone": { "type": "string", "description": "Customer phone number" },
+        "isProMember": { "type": "boolean", "description": "Whether FRESCUT Pro is active" },
+        "selectedPaymentMethod": { "type": "string", "description": "Preferred payment method" },
+        "deliveryInstructions": { "type": "string", "description": "Default delivery note" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Profile creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Profile update timestamp" }
+      },
+      "required": [
+        "userId", "name", "email", "phone", "isProMember",
+        "selectedPaymentMethod", "deliveryInstructions", "createdAt", "updatedAt"
+      ]
+    },
+    "UserAddress": {
+      "title": "UserAddress",
+      "description": "Customer saved delivery address",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "label": { "type": "string", "description": "Address label (Home, Work, Other)" },
+        "areaName": { "type": "string", "description": "Locality / area name" },
+        "fullAddress": { "type": "string", "description": "Complete street address" },
+        "deliveryMins": { "type": "integer", "description": "Estimated delivery time in minutes" },
+        "isSelected": { "type": "boolean", "description": "Whether this is the active address" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update server timestamp" }
+      },
+      "required": [
+        "userId", "label", "areaName", "fullAddress",
+        "deliveryMins", "isSelected", "createdAt", "updatedAt"
+      ]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promotional coupon in Firestore coupons collection",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Coupon code (e.g. WELCOME10)" },
+        "discountPercent": { "type": "integer", "description": "Percentage discount" },
+        "minOrder": { "type": "integer", "description": "Minimum order amount in INR" },
+        "active": { "type": "boolean", "description": "Whether coupon is currently active" },
+        "title": { "type": "string", "description": "Optional offer title" },
+        "subtitle": { "type": "string", "description": "Optional offer subtitle" },
+        "maxDiscount": { "type": "integer", "description": "Optional max INR discount" },
+        "ownerId": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["code", "discountPercent", "minOrder", "active"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Promotional hero banner in Firestore banners collection",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Banner headline" },
+        "subtitle": { "type": "string", "description": "Banner subtitle" },
+        "buttonText": { "type": "string", "description": "CTA button label" },
+        "imageUrl": { "type": "string", "description": "Banner image key or URL" },
+        "active": { "type": "boolean", "description": "Whether the banner is active" },
+        "order": { "type": "integer", "description": "Display sort order" },
+        "targetCategory": { "type": "string", "description": "Category opened on click" },
+        "ownerId": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["title", "subtitle", "buttonText", "imageUrl", "active", "order"]
+    },
+    "Recipe": {
+      "title": "Recipe",
+      "description": "Chef recipe card in Firestore recipes collection",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Recipe title" },
+        "time": { "type": "string", "description": "Cooking/prep time label" },
+        "difficulty": { "type": "string", "description": "Difficulty label" },
+        "imageUrl": { "type": "string", "description": "Recipe image key or URL" },
+        "active": { "type": "boolean", "description": "Whether the recipe is active" },
+        "order": { "type": "integer", "description": "Display sort order" },
+        "ownerId": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["title", "time", "difficulty", "imageUrl", "active", "order"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer review in Firestore reviews collection",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Reviewer name" },
+        "text": { "type": "string", "description": "Customer review text" },
+        "rating": { "type": "number", "description": "Star rating (1-5)" },
+        "active": { "type": "boolean", "description": "Whether the review is active" },
+        "order": { "type": "integer", "description": "Display sort order" },
+        "ownerId": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["name", "text", "rating", "active", "order"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Dynamic app configuration in Firestore config/app_config document",
+      "type": "object",
+      "properties": {
+        "searchChips": { "type": "array", "description": "Search bar animated placeholder names" },
+        "referralCode": { "type": "string", "description": "Active referral code" },
+        "storeName": { "type": "string", "description": "Store display name" },
+        "supportPhone": { "type": "string", "description": "Customer support phone number" },
+        "minOrderAmount": { "type": "integer", "description": "Minimum order amount in INR" },
+        "ownerId": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["searchChips", "referralCode", "storeName", "supportPhone", "minOrderAmount"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Quick navigation category item in Firestore categories collection",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Category display name" },
+        "image": { "type": "string", "description": "Drawable key for category icon/photo" },
+        "isAllTab": { "type": "boolean", "description": "Whether this is the All category tab" },
+        "isMoreTab": { "type": "boolean", "description": "Whether this is the More category tab" },
+        "order": { "type": "integer", "description": "Display sort order" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update server timestamp" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Publicly readable product catalog; writable only by the owner"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders; readable and creatable only by the owning user (userId == auth.uid)"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile document; private to the owning user"
+    },
+    "/users/{userId}/addresses/{addressId}": {
+      "schema": { "$ref": "#/entities/UserAddress" },
+      "description": "Saved addresses for a user; private to the owning user"
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Publicly readable coupons; writable only by the owner"
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/Banner" },
+      "description": "Publicly readable promotional banners; writable only by the owner"
+    },
+    "/recipes/{recipeId}": {
+      "schema": { "$ref": "#/entities/Recipe" },
+      "description": "Publicly readable recipes; writable only by the owner"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Publicly readable customer reviews; writable only by the owner"
+    },
+    "/config/{configId}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Publicly readable app configuration (config/app_config); writable only by the owner"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Publicly readable quick navigation categories; writable only by the owner"
+    }
+  }
+}

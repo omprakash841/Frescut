@@ -59,10 +59,16 @@ import com.example.ui.components.FrescutStickyHeader
 import com.example.ui.components.ObserveSmartBottomNavScroll
 import com.example.ui.components.ReferenceHorizontalProductCard
 import com.example.ui.theme.FrescutBorderLight
+import com.example.ui.theme.FrescutFocusRed
+import com.example.ui.theme.FrescutOutlineShape
 import com.example.ui.theme.FrescutRedBright
+import com.example.ui.theme.FrescutSelectedPinkBg
+import com.example.ui.theme.FrescutSelectedTabUnderline
 import com.example.ui.theme.FrescutTextPrimary
 import com.example.ui.theme.FrescutTextSecondary
+import com.example.ui.theme.FrescutThinDivider
 import com.example.ui.theme.FrescutWhite
+import com.example.ui.theme.formatItemCount
 
 @Composable
 fun CategoriesScreen(
@@ -75,9 +81,11 @@ fun CategoriesScreen(
     selectedSortOption: SortOption,
     products: List<ProductEntity>,
     cartItems: List<CartProductItem>,
+    searchPlaceholders: List<String> = emptyList(),
     onLocationClick: () -> Unit,
     onProClick: () -> Unit,
     onNotificationClick: () -> Unit,
+    onCartClick: () -> Unit = {},
     onSearchBarClick: () -> Unit,
     onSelectCategory: (String) -> Unit,
     onBackFromCategoryDetail: () -> Unit,
@@ -105,6 +113,10 @@ fun CategoriesScreen(
         cartItems.associate { it.product.id to it.quantity }
     }
 
+    val cartCount = remember(cartItems) {
+        cartItems.sumOf { it.quantity }
+    }
+
     if (selectedCategoryDetail != null) {
         BackHandler(onBack = onBackFromCategoryDetail)
     }
@@ -114,7 +126,7 @@ fun CategoriesScreen(
             .fillMaxSize()
             .background(FrescutWhite)
     ) {
-        // Top Red Sticky Header with Location, Pro, Bell & Search Bar (matches both Category screens in reference)
+        // Top Red Sticky Header with Location, Pro, Bell, Cart & Search Bar (matches both Category screens in reference)
         FrescutStickyHeader(
             areaName = areaName,
             deliveryMins = deliveryMins,
@@ -127,7 +139,10 @@ fun CategoriesScreen(
             onProClick = onProClick,
             onNotificationClick = onNotificationClick,
             onSearchBarClick = onSearchBarClick,
-            onCategorySelect = {}
+            onCategorySelect = {},
+            cartCount = cartCount,
+            onCartClick = onCartClick,
+            searchPlaceholders = searchPlaceholders
         )
 
         if (selectedCategoryDetail == null) {
@@ -166,8 +181,16 @@ fun CategoriesScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         rowItems.forEach { category ->
+                            val matchingCount = products.count {
+                                it.category.equals(category.name, ignoreCase = true)
+                            }
+                            val displayCategory = if (matchingCount > 0) {
+                                category.copy(itemCountText = formatItemCount(matchingCount, capitalized = true))
+                            } else {
+                                category
+                            }
                             CategoryGridTile(
-                                category = category,
+                                category = displayCategory,
                                 onClick = { onSelectCategory(category.name) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -261,7 +284,7 @@ fun CategoriesScreen(
                                 )
                             )
                             Text(
-                                text = categoryModel.itemCountText,
+                                text = formatItemCount(categoryProducts.size, capitalized = true),
                                 color = FrescutTextSecondary,
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 12.sp,
@@ -348,39 +371,46 @@ fun CategoriesScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                        .padding(start = 14.dp, end = 14.dp, top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Bottom
                 ) {
                     categoryModel.subcategories.forEach { sub ->
                         val isSelected = selectedSubcategory.equals(sub, ignoreCase = true)
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(
-                                    if (isSelected) FrescutRedBright else FrescutWhite
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) FrescutRedBright else FrescutBorderLight,
-                                    shape = RoundedCornerShape(50)
-                                )
-                                .clickable { onSelectSubcategory(sub) }
-                                .testTag("subcat_pill_${sub.lowercase()}")
-                                .padding(horizontal = 16.dp, vertical = 7.dp),
-                            contentAlignment = Alignment.Center
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = sub,
-                                color = if (isSelected) FrescutWhite else FrescutTextPrimary,
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.5.sp
+                            Box(
+                                modifier = Modifier
+                                    .clip(FrescutOutlineShape)
+                                    .background(
+                                        if (isSelected) FrescutSelectedPinkBg else FrescutWhite
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) FrescutFocusRed else FrescutBorderLight,
+                                        shape = FrescutOutlineShape
+                                    )
+                                    .clickable { onSelectSubcategory(sub) }
+                                    .testTag("subcat_pill_${sub.lowercase()}")
+                                    .padding(horizontal = 16.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = sub,
+                                    color = if (isSelected) FrescutFocusRed else FrescutTextPrimary,
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.5.sp
+                                    )
                                 )
-                            )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            FrescutSelectedTabUnderline(isSelected = isSelected)
                         }
                     }
                 }
+                FrescutThinDivider()
 
                 Spacer(modifier = Modifier.height(8.dp))
 

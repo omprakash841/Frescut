@@ -20,9 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -45,12 +43,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ProductEntity
 import com.example.ui.theme.FrescutBorderLight
+import com.example.ui.theme.FrescutFocusRed
 import com.example.ui.theme.FrescutGreenDiscount
+import com.example.ui.theme.FrescutOutlineBorderWidth
+import com.example.ui.theme.FrescutOutlineRadius
+import com.example.ui.theme.FrescutOutlineShape
 import com.example.ui.theme.FrescutRedBright
 import com.example.ui.theme.FrescutTextMuted
 import com.example.ui.theme.FrescutTextPrimary
 import com.example.ui.theme.FrescutTextSecondary
 import com.example.ui.theme.FrescutWhite
+import com.example.ui.theme.frescutOutlineContainer
 
 @Composable
 fun ReferenceVerticalProductCard(
@@ -63,31 +66,30 @@ fun ReferenceVerticalProductCard(
     modifier: Modifier = Modifier,
     cardWidth: Dp = 178.dp
 ) {
+    val widthModifier = if (cardWidth != Dp.Unspecified) {
+        Modifier.width(cardWidth)
+    } else {
+        Modifier.fillMaxWidth()
+    }
     Card(
         modifier = modifier
-            .width(cardWidth)
-            .clip(RoundedCornerShape(14.dp))
+            .then(widthModifier)
+            .frescutOutlineContainer()
             .clickable(onClick = onCardClick)
             .testTag("product_card_${product.id}"),
-        shape = RoundedCornerShape(14.dp),
+        shape = FrescutOutlineShape,
         colors = CardDefaults.cardColors(containerColor = FrescutWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = FrescutBorderLight.copy(alpha = 0.65f),
-                    shape = RoundedCornerShape(14.dp)
-                )
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Product Image with Top-Right Heart Icon
+            // Product Image (Heart icon removed)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(106.dp)
-                    .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                    .clip(RoundedCornerShape(topStart = FrescutOutlineRadius, topEnd = FrescutOutlineRadius))
             ) {
                 Image(
                     painter = painterResource(id = product.imageRes),
@@ -95,33 +97,6 @@ fun ReferenceVerticalProductCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-
-                // Favorite heart circle button in top-right (matching reference screenshots)
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onFavoriteToggle)
-                        .testTag("fav_btn_${product.id}"),
-                    shape = CircleShape,
-                    color = FrescutWhite.copy(alpha = 0.94f),
-                    shadowElevation = 2.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (product.isFavorite) {
-                                Icons.Filled.Favorite
-                            } else {
-                                Icons.Outlined.FavoriteBorder
-                            },
-                            contentDescription = "Favorite",
-                            tint = if (product.isFavorite) FrescutRedBright else FrescutTextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
             }
 
             Column(
@@ -212,7 +187,7 @@ fun ReferenceVerticalProductCard(
                     )
                 }
 
-                // Flash 30 mins subtle indicator matching Screenshot 1
+                // "30 min delivery" subtle indicator
                 if (product.isFlashDelivery) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -222,20 +197,13 @@ fun ReferenceVerticalProductCard(
                             tint = Color(0xFFEA580C),
                             modifier = Modifier.size(12.dp)
                         )
+                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
-                            text = "FLASH ",
-                            color = Color(0xFFEA580C),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 9.5.sp
-                            )
-                        )
-                        Text(
-                            text = "${product.deliveryTimeMins} mins",
+                            text = "${product.deliveryTimeMins} min delivery",
                             color = FrescutTextSecondary,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.SemiBold
                             )
                         )
                     }
@@ -258,21 +226,16 @@ fun ReferenceHorizontalProductCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .frescutOutlineContainer()
             .clickable(onClick = onCardClick)
             .testTag("cat_product_card_${product.id}"),
-        shape = RoundedCornerShape(14.dp),
+        shape = FrescutOutlineShape,
         colors = CardDefaults.cardColors(containerColor = FrescutWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = FrescutBorderLight.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(14.dp)
-                )
                 .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -289,51 +252,30 @@ fun ReferenceHorizontalProductCard(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Middle Product Info + Right Heart & Add Button
+            // Middle Product Info + Right Add Button (Heart icon removed)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = product.name,
-                            color = FrescutTextPrimary,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = product.name,
+                        color = FrescutTextPrimary,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.5.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = product.weightAndServings,
+                        color = FrescutTextSecondary,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = product.weightAndServings,
-                            color = FrescutTextSecondary,
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                    }
-
-                    Icon(
-                        imageVector = if (product.isFavorite) {
-                            Icons.Filled.Favorite
-                        } else {
-                            Icons.Outlined.FavoriteBorder
-                        },
-                        contentDescription = "Wishlist",
-                        tint = if (product.isFavorite) FrescutRedBright else FrescutTextMuted,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = onFavoriteToggle)
-                            .padding(2.dp)
                     )
                 }
 
@@ -398,30 +340,35 @@ fun ProductAddButtonOrStepper(
     modifier: Modifier = Modifier
 ) {
     if (quantity <= 0) {
-        // "+ Add" white rounded pill with red border & red bold text matching reference screenshots
-        Box(
+        // "+ Add" white rounded button with 1dp border & very light shadow (1.5dp) as requested
+        Surface(
             modifier = modifier
                 .height(28.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(FrescutWhite)
                 .border(
-                    width = 1.dp,
-                    color = FrescutRedBright,
+                    width = FrescutOutlineBorderWidth,
+                    color = FrescutFocusRed,
                     shape = RoundedCornerShape(8.dp)
                 )
                 .clickable(onClick = onAddClick)
-                .testTag("add_btn_$productId")
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
+                .testTag("add_btn_$productId"),
+            shape = RoundedCornerShape(8.dp),
+            color = FrescutWhite,
+            shadowElevation = 1.5.dp
         ) {
-            Text(
-                text = "+ Add",
-                color = FrescutRedBright,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 12.sp
+            Box(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+ Add",
+                    color = FrescutFocusRed,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp
+                    )
                 )
-            )
+            }
         }
     } else {
         // Active Red Stepper (- 1 +)
@@ -429,7 +376,7 @@ fun ProductAddButtonOrStepper(
             modifier = modifier
                 .height(28.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(FrescutRedBright)
+                .background(FrescutFocusRed)
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)

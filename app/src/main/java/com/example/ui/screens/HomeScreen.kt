@@ -35,12 +35,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,9 +63,11 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.CartProductItem
 import com.example.data.CategoryCardModel
+import com.example.data.CouponOfferModel
 import com.example.data.CustomerReviewModel
 import com.example.data.ProductEntity
 import com.example.data.PromotionalBannerModel
+import com.example.data.QuickNavCategoryItem
 import com.example.data.RecipeCardModel
 import com.example.data.SeedData
 import com.example.ui.components.FrescutStickyHeader
@@ -90,9 +95,16 @@ fun HomeScreen(
     hasUnreadNotifications: Boolean,
     products: List<ProductEntity>,
     cartItems: List<CartProductItem>,
+    banners: List<PromotionalBannerModel>,
+    recipes: List<RecipeCardModel>,
+    reviews: List<CustomerReviewModel>,
+    activeCoupons: List<CouponOfferModel>,
+    searchPlaceholders: List<String>,
+    quickCategories: List<QuickNavCategoryItem>,
     onLocationClick: () -> Unit,
     onProClick: () -> Unit,
     onNotificationClick: () -> Unit,
+    onCartClick: () -> Unit = {},
     onSearchBarClick: () -> Unit,
     onHomeCategorySelect: (String) -> Unit,
     onToggleViewAllCurrentHits: (Boolean) -> Unit,
@@ -124,7 +136,10 @@ fun HomeScreen(
         if (selectedHomeCategory.equals("All", ignoreCase = true)) {
             products
         } else {
-            products.filter { it.category.equals(selectedHomeCategory, ignoreCase = true) }
+            products.filter {
+                it.category.equals(selectedHomeCategory, ignoreCase = true) ||
+                    (selectedHomeCategory.equals("Fish", ignoreCase = true) && it.category.contains("Fish", ignoreCase = true))
+            }
         }
     }
 
@@ -141,12 +156,28 @@ fun HomeScreen(
         cartItems.associate { it.product.id to it.quantity }
     }
 
+    val cartCount = remember(cartItems) {
+        cartItems.sumOf { it.quantity }
+    }
+
+    val activeBanners = remember(banners) {
+        banners.filter { it.active }.sortedBy { it.order }
+    }
+
+    val activeRecipes = remember(recipes) {
+        recipes.filter { it.active }.sortedBy { it.order }
+    }
+
+    val activeReviews = remember(reviews) {
+        reviews.filter { it.active }.sortedBy { it.order }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(FrescutWhite)
     ) {
-        // 1 & 2. Sticky Header (Location/Pro/Bell collapses on scroll; Search Bar + Category Nav stay sticky)
+        // 1 & 2. Sticky Header (Location/Pro/Bell/Cart collapses on scroll; Search Bar + Category Nav stay sticky)
         FrescutStickyHeader(
             areaName = areaName,
             deliveryMins = deliveryMins,
@@ -159,7 +190,11 @@ fun HomeScreen(
             onProClick = onProClick,
             onNotificationClick = onNotificationClick,
             onSearchBarClick = onSearchBarClick,
-            onCategorySelect = onHomeCategorySelect
+            onCategorySelect = onHomeCategorySelect,
+            cartCount = cartCount,
+            onCartClick = onCartClick,
+            searchPlaceholders = searchPlaceholders,
+            quickCategories = quickCategories
         )
 
         // Scrollable Home Content underneath sticky Search + Category bar
@@ -183,36 +218,63 @@ fun HomeScreen(
                 }
             }
 
-            // 4. Promotional Banner Carousel (hidden when user toggled "View All" compact hits or scrolled if desired, visible in All)
-            item(key = "promo_banner_carousel") {
-                PromotionalBannerCarousel(
-                    banners = SeedData.promotionalBanners,
-                    onBannerClick = { banner ->
-                        onOpenCategoryDetail(banner.targetCategory)
-                    }
-                )
+            // 4. Promotional Banner Carousel (shown ONLY when at least 1 active banner exists in Firestore)
+            if (activeBanners.isNotEmpty()) {
+                item(key = "promo_banner_carousel") {
+                    PromotionalBannerCarousel(
+                        banners = activeBanners,
+                        onBannerClick = { banner ->
+                            onOpenCategoryDetail(banner.targetCategory)
+                        }
+                    )
+                }
             }
 
-            // 5. Welcome Rewards Banner (Extra 20% OFF on your first 3 orders! Code: FRESH20)
-            item(key = "welcome_rewards_banner") {
-                WelcomeRewardsBanner(
-                    onApplyCode = { onApplyWelcomeCoupon("FRESH20") }
-                )
+            // 5. Active Coupon Banner (read strictly from Firestore "coupons" collection where active == true)
+            val featuredCoupon = activeCoupons.firstOrNull { it.active }
+            if (featuredCoupon != null) {
+                item(key = "welcome_rewards_banner") {
+                    WelcomeRewardsBanner(
+                        coupon = featuredCoupon,
+                        onApplyCode = { onApplyWelcomeCoupon(featuredCoupon.code) }
+                    )
+                }
             }
 
-            // 6. Our Current Hits Section (Supports both Horizontal Carousel and 2-Column Grid matching both screenshots!)
+            // 6. Category-specific Section OR "Our Current Hits" Section
             item(key = "current_hits_section") {
+                val isSpecificCategory = !selectedHomeCategory.equals("All", ignoreCase = true)
+                val sectionTitle = if (isSpecificCategory) selectedHomeCategory else "Our Current Hits"
+                val sectionSubtitle = if (isSpecificCategory) {
+                    "${com.example.ui.theme.formatFreshCutCount(filteredProducts.size)} available"
+                } else {
+                    "Here’s what everyone’s eating!"
+                }
+                val showGridLayout = isSpecificCategory || showAllCurrentHitsGrid || currentHitsProducts.size <= 2
+
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SectionHeaderRow(
-                        title = "Our Current Hits",
-                        subtitle = "Here’s what everyone’s eating!",
-                        actionText = if (showAllCurrentHitsGrid) "Carousel" else "View All",
-                        onActionClick = { onToggleViewAllCurrentHits(!showAllCurrentHitsGrid) }
+                        title = sectionTitle,
+                        subtitle = sectionSubtitle,
+                        actionText = if (isSpecificCategory) {
+                            "Subcategories"
+                        } else if (showAllCurrentHitsGrid) {
+                            "Carousel"
+                        } else {
+                            "View All"
+                        },
+                        onActionClick = {
+                            if (isSpecificCategory) {
+                                onOpenCategoryDetail(selectedHomeCategory)
+                            } else {
+                                onToggleViewAllCurrentHits(!showAllCurrentHitsGrid)
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    if (!showAllCurrentHitsGrid) {
+                    if (!showGridLayout) {
                         // Horizontal Carousel + 2x2 featured grid preview
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 14.dp),
@@ -231,7 +293,6 @@ fun HomeScreen(
                             }
                         }
 
-                        // Also show second row of 2 cards when scrolling to match the 2x2 "On Scroll" reference!
                         if (currentHitsProducts.size >= 4) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Row(
@@ -248,13 +309,14 @@ fun HomeScreen(
                                         onAddClick = { onAddProduct(product) },
                                         onDecrementClick = { onDecrementProduct(product) },
                                         onFavoriteToggle = { onToggleFavorite(product) },
+                                        cardWidth = androidx.compose.ui.unit.Dp.Unspecified,
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
                             }
                         }
                     } else {
-                        // Full 2-Column Grid of all products in Current Hits
+                        // Full 2-Column Grid so even 1 or 2 products in a category display properly
                         val rows = filteredProducts.chunked(2)
                         Column(
                             modifier = Modifier
@@ -275,6 +337,7 @@ fun HomeScreen(
                                             onAddClick = { onAddProduct(product) },
                                             onDecrementClick = { onDecrementProduct(product) },
                                             onFavoriteToggle = { onToggleFavorite(product) },
+                                            cardWidth = androidx.compose.ui.unit.Dp.Unspecified,
                                             modifier = Modifier.weight(1f)
                                         )
                                     }
@@ -318,7 +381,7 @@ fun HomeScreen(
                 }
             }
 
-            // 8. Shop by Category Section (matching circular pastel avatars & badged plates in reference screenshots)
+            // 8. Shop by Category Section
             item(key = "shop_by_category_section") {
                 Spacer(modifier = Modifier.height(22.dp))
                 HomeShopByCategorySection(
@@ -329,66 +392,62 @@ fun HomeScreen(
                 )
             }
 
-            // 9. Recipe or Meal Inspiration Cards ("Crafted for Your Recipes")
-            item(key = "crafted_recipes_section") {
-                Spacer(modifier = Modifier.height(22.dp))
-                SectionHeaderRow(
-                    title = "Crafted for Your Recipes",
-                    subtitle = "Chef-curated cuts for restaurant dishes at home",
-                    actionText = null,
-                    onActionClick = {}
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(SeedData.recipes, key = { it.id }) { recipe ->
-                        RecipeInspirationCard(
-                            recipe = recipe,
-                            onCardClick = { onRecipeClick(recipe) },
-                            onAddCutClick = {
-                                val target = products.find { it.id == recipe.primaryProductId }
-                                if (target != null) {
-                                    onAddProduct(target)
+            // 9. Recipe or Meal Inspiration Cards (shown ONLY when at least 1 active recipe exists in Firestore)
+            if (activeRecipes.isNotEmpty()) {
+                item(key = "crafted_recipes_section") {
+                    Spacer(modifier = Modifier.height(22.dp))
+                    SectionHeaderRow(
+                        title = "Crafted for Your Recipes",
+                        subtitle = "Chef-curated cuts for restaurant dishes at home",
+                        actionText = null,
+                        onActionClick = {}
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(activeRecipes, key = { it.id }) { recipe ->
+                            RecipeInspirationCard(
+                                recipe = recipe,
+                                onCardClick = { onRecipeClick(recipe) },
+                                onAddCutClick = {
+                                    val target = products.find { it.id == recipe.primaryProductId }
+                                    if (target != null) {
+                                        onAddProduct(target)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
 
-            // 10. Promotional Content Banner (Combo Packs Banner matching reference)
-            item(key = "combo_packs_promo_banner") {
-                Spacer(modifier = Modifier.height(22.dp))
-                ComboPacksBannerCard(
-                    onExploreClick = { onOpenCategoryDetail("Value Packs") },
-                    modifier = Modifier.padding(horizontal = 14.dp)
-                )
-            }
-
-            // 11. Customer Reviews Section
-            item(key = "customer_reviews_section") {
-                Spacer(modifier = Modifier.height(22.dp))
-                SectionHeaderRow(
-                    title = "Customer Reviews",
-                    subtitle = "What Bargarh & Odisha meat lovers are saying",
-                    actionText = null,
-                    onActionClick = {}
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(SeedData.customerReviews, key = { it.id }) { review ->
-                        CustomerReviewCard(review = review)
+            // 10. Customer Reviews Section (shown ONLY when at least 1 active review exists in Firestore)
+            if (activeReviews.isNotEmpty()) {
+                item(key = "customer_reviews_section") {
+                    Spacer(modifier = Modifier.height(22.dp))
+                    SectionHeaderRow(
+                        title = "Customer Reviews",
+                        subtitle = "Verified customer feedback",
+                        actionText = null,
+                        onActionClick = {}
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(activeReviews, key = { it.id }) { review ->
+                            CustomerReviewCard(review = review)
+                        }
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 private fun SecondaryCategoryFilterBanner(
@@ -403,27 +462,46 @@ private fun SecondaryCategoryFilterBanner(
             .padding(horizontal = 14.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(FrescutRedLightBg)
-            .border(1.dp, FrescutRedSoftBorder, RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0xFFC8101E), RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "Showing $categoryName ($itemCount fresh cuts)",
+            text = "Showing $categoryName (${com.example.ui.theme.formatFreshCutCount(itemCount)})",
             color = FrescutRedDark,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = "Subcategories →",
+                text = "Subcategories",
                 color = FrescutRedBright,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 12.sp
+                ),
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier.clickable(onClick = onOpenFullCategory)
             )
             Text(
                 text = "Reset",
                 color = FrescutTextSecondary,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp
+                ),
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier.clickable(onClick = onResetAll)
             )
         }
@@ -436,6 +514,16 @@ private fun PromotionalBannerCarousel(
     onBannerClick: (PromotionalBannerModel) -> Unit
 ) {
     val pagerState = rememberPagerState(pageCount = { banners.size })
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+
+    // Auto-slide every 5 seconds when more than 1 banner exists; pause on touch/drag/swipe and restart 5s timer after release
+    LaunchedEffect(banners.size, isDragged, pagerState.settledPage) {
+        if (banners.size > 1 && !isDragged) {
+            delay(5000L)
+            val nextPage = (pagerState.currentPage + 1) % banners.size
+            pagerState.animateScrollToPage(nextPage)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -454,13 +542,13 @@ private fun PromotionalBannerCarousel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(152.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF7A0409),
-                                Color(0xFFA50910),
-                                Color(0xFF8B050B)
+                                Color(0xFF590206),
+                                Color(0xFF8B050B),
+                                Color(0xFFA50910)
                             )
                         )
                     )
@@ -473,24 +561,25 @@ private fun PromotionalBannerCarousel(
                     contentDescription = banner.title,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .fillMaxWidth(0.54f)
+                        .fillMaxWidth(0.46f)
                         .fillMaxHeight(),
                     contentScale = ContentScale.Crop
                 )
 
-                // Smooth dark-red gradient overlay on left so text is 100% legible and matches reference
+                // Strong dark gradient backdrop behind left text so text never clashes with photo
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             brush = Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color(0xFF7D0409),
-                                    Color(0xFF8E060B).copy(alpha = 0.92f),
+                                    Color(0xFF4C0205),
+                                    Color(0xFF6E0408).copy(alpha = 0.96f),
+                                    Color(0xFF7D0409).copy(alpha = 0.78f),
                                     Color.Transparent
                                 ),
                                 startX = 0f,
-                                endX = 620f
+                                endX = 720f
                             )
                         )
                 )
@@ -498,61 +587,81 @@ private fun PromotionalBannerCarousel(
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .fillMaxWidth(0.66f)
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .fillMaxWidth(0.58f)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = banner.title,
-                        color = FrescutWhite,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp,
-                            lineHeight = 22.sp
+                    Column {
+                        Text(
+                            text = banner.title,
+                            color = FrescutWhite,
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.5.sp,
+                                lineHeight = 20.sp
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    )
+                        if (banner.subtitle.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = banner.subtitle,
+                                color = FrescutWhite.copy(alpha = 0.92f),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
 
-                    // Checkmark highlights row: ✔ Hygienic | ✔ Fresh | ✔ Trusted
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        banner.highlights.forEachIndexed { index, item ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Filled.CheckCircle,
-                                    contentDescription = null,
-                                    tint = FrescutGold,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = item,
-                                    color = FrescutWhite,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 10.5.sp
+                    // Checkmark highlights row if present
+                    if (banner.highlights.isNotEmpty() && banner.subtitle.isBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            banner.highlights.forEachIndexed { index, item ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        tint = FrescutGold,
+                                        modifier = Modifier.size(12.dp)
                                     )
-                                )
-                            }
-                            if (index < banner.highlights.lastIndex) {
-                                Text(
-                                    text = "|",
-                                    color = FrescutWhite.copy(alpha = 0.45f),
-                                    fontSize = 10.sp
-                                )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = item,
+                                        color = FrescutWhite,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                                if (index < banner.highlights.lastIndex) {
+                                    Text(
+                                        text = "|",
+                                        color = FrescutWhite.copy(alpha = 0.45f),
+                                        fontSize = 10.sp
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // White pill button "Order Now ->"
+                    // White button "Order Now ->" (no shadow)
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(12.dp),
                         color = FrescutWhite,
-                        shadowElevation = 2.dp
+                        shadowElevation = 0.dp
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -560,7 +669,7 @@ private fun PromotionalBannerCarousel(
                                 color = FrescutRedBright,
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 12.sp
+                                    fontSize = 11.5.sp
                                 )
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -568,7 +677,7 @@ private fun PromotionalBannerCarousel(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = null,
                                 tint = FrescutRedBright,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                         }
                     }
@@ -591,7 +700,7 @@ private fun PromotionalBannerCarousel(
                         .height(5.dp)
                         .clip(RoundedCornerShape(50))
                         .background(
-                            if (isSelected) FrescutRedBright else Color(0xFFE5E7EB)
+                            if (isSelected) FrescutRedBright else FrescutBorderLight
                         )
                 )
             }
@@ -601,6 +710,7 @@ private fun PromotionalBannerCarousel(
 
 @Composable
 private fun WelcomeRewardsBanner(
+    coupon: CouponOfferModel,
     onApplyCode: () -> Unit
 ) {
     Box(
@@ -629,7 +739,7 @@ private fun WelcomeRewardsBanner(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Welcome Rewards",
+                    text = coupon.title,
                     color = FrescutRedBright,
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
@@ -655,32 +765,20 @@ private fun WelcomeRewardsBanner(
                                 fontSize = 18.sp
                             )
                         ) {
-                            append("20% OFF")
+                            append("${coupon.discountPercent}% OFF")
                         }
                     }
                 )
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(
-                            SpanStyle(
-                                color = FrescutTextSecondary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.5.sp
-                            )
-                        ) {
-                            append("on your first ")
-                        }
-                        withStyle(
-                            SpanStyle(
-                                color = FrescutRedBright,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 12.5.sp
-                            )
-                        ) {
-                            append("3 orders!")
-                        }
-                    }
-                )
+                if (coupon.subtitle.isNotBlank()) {
+                    Text(
+                        text = coupon.subtitle,
+                        color = FrescutTextSecondary,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                    )
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Box(
                     modifier = Modifier
@@ -689,7 +787,7 @@ private fun WelcomeRewardsBanner(
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "Code: FRESH20",
+                        text = "Code: ${coupon.code}",
                         color = FrescutRedBright,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.ExtraBold,
@@ -701,7 +799,7 @@ private fun WelcomeRewardsBanner(
 
             Image(
                 painter = painterResource(id = R.drawable.img_gift_box_reward),
-                contentDescription = "Welcome Rewards Gift Box",
+                contentDescription = coupon.title,
                 modifier = Modifier
                     .width(96.dp)
                     .height(78.dp)
@@ -711,6 +809,7 @@ private fun WelcomeRewardsBanner(
         }
     }
 }
+
 
 @Composable
 fun SectionHeaderRow(
@@ -885,17 +984,16 @@ private fun RecipeInspirationCard(
     Card(
         modifier = Modifier
             .width(236.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, FrescutBorderLight, RoundedCornerShape(12.dp))
             .clickable(onClick = onCardClick)
             .testTag("recipe_card_${recipe.id}"),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = FrescutWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, FrescutBorderLight.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+            modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
@@ -913,7 +1011,8 @@ private fun RecipeInspirationCard(
                         .align(Alignment.TopStart)
                         .padding(8.dp),
                     shape = RoundedCornerShape(50),
-                    color = Color.Black.copy(alpha = 0.68f)
+                    color = Color.Black.copy(alpha = 0.68f),
+                    shadowElevation = 0.dp
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -975,13 +1074,13 @@ private fun RecipeInspirationCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(FrescutRedLightBg)
-                            .border(1.dp, FrescutRedBright, RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFFC8101E), RoundedCornerShape(8.dp))
                             .clickable(onClick = onAddCutClick)
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "+ Add Cut",
-                            color = FrescutRedBright,
+                            color = Color(0xFFC8101E),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 11.sp
@@ -1003,7 +1102,7 @@ fun ComboPacksBannerCard(
         modifier = modifier
             .fillMaxWidth()
             .height(132.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(
                 brush = Brush.horizontalGradient(
                     colors = listOf(FrescutRedDark, FrescutRedPrimary)
@@ -1018,13 +1117,13 @@ fun ComboPacksBannerCard(
             contentDescription = "Combo Packs",
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .fillMaxWidth(0.52f)
+                .fillMaxWidth(0.46f)
                 .fillMaxHeight(0.88f)
                 .clip(RoundedCornerShape(topStart = 12.dp)),
             contentScale = ContentScale.Crop
         )
 
-        // Yellow "%" badge in top-right matching Categories reference screenshot
+        // Yellow "%" badge in top-right
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -1047,7 +1146,7 @@ fun ComboPacksBannerCard(
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .fillMaxWidth(0.58f)
+                .fillMaxWidth(0.56f)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1057,7 +1156,7 @@ fun ComboPacksBannerCard(
                     color = FrescutWhite,
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 19.sp
+                        fontSize = 18.sp
                     )
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -1065,16 +1164,17 @@ fun ComboPacksBannerCard(
                     text = "Save More on\nYour Favorites",
                     color = FrescutWhite.copy(alpha = 0.9f),
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
+                        fontSize = 11.5.sp,
+                        lineHeight = 15.sp,
                         fontWeight = FontWeight.Medium
                     )
                 )
             }
 
             Surface(
-                shape = RoundedCornerShape(50),
-                color = FrescutWhite
+                shape = RoundedCornerShape(12.dp),
+                color = FrescutWhite,
+                shadowElevation = 0.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -1108,15 +1208,15 @@ private fun CustomerReviewCard(
     Card(
         modifier = Modifier
             .width(262.dp)
-            .clip(RoundedCornerShape(14.dp)),
-        shape = RoundedCornerShape(14.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, FrescutBorderLight, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = FrescutWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, FrescutBorderLight.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
                 .padding(12.dp)
         ) {
             Row(
@@ -1141,20 +1241,22 @@ private fun CustomerReviewCard(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(FrescutRedLightBg)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = review.orderedCut,
-                        color = FrescutRedBright,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.5.sp
+                if (review.orderedCut.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(FrescutRedLightBg)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = review.orderedCut,
+                            color = FrescutRedBright,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.5.sp
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -1187,11 +1289,13 @@ private fun CustomerReviewCard(
                             fontSize = 11.5.sp
                         )
                     )
-                    Text(
-                        text = review.location,
-                        color = FrescutTextSecondary,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
-                    )
+                    if (review.location.isNotBlank()) {
+                        Text(
+                            text = review.location,
+                            color = FrescutTextSecondary,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {

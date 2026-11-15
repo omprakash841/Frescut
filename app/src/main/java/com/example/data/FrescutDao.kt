@@ -20,9 +20,6 @@ interface FrescutDao {
     @Query("UPDATE products SET isFavorite = :isFavorite WHERE id = :productId")
     suspend fun updateProductFavorite(productId: String, isFavorite: Boolean)
 
-    @Query("UPDATE products SET pricePerKg = :pricePerKg, budgetSelectorEnabled = :enabled WHERE id = :productId")
-    suspend fun updateProductBudgetSettings(productId: String, pricePerKg: Int, enabled: Boolean)
-
     @Query("SELECT * FROM category_budget_configs")
     fun getCategoryBudgetConfigs(): Flow<List<CategoryBudgetConfigEntity>>
 
@@ -31,9 +28,6 @@ interface FrescutDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCategoryBudgetConfigs(configs: List<CategoryBudgetConfigEntity>)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertCategoryBudgetConfig(config: CategoryBudgetConfigEntity)
 
     @Query("SELECT * FROM recommendation_configs WHERE id = 1")
     fun getRecommendationConfig(): Flow<RecommendationConfigEntity?>
@@ -56,17 +50,11 @@ interface FrescutDao {
     @Query("DELETE FROM cart_items")
     suspend fun clearCart()
 
-    @Query("SELECT * FROM orders ORDER BY createdAtEpoch DESC")
-    fun getAllOrders(): Flow<List<OrderEntity>>
+    @Query("DELETE FROM orders")
+    suspend fun clearOrders()
 
-    @Query("SELECT COUNT(*) FROM orders")
-    suspend fun getOrderCount(): Int
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrders(orders: List<OrderEntity>)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrder(order: OrderEntity)
+    @Query("DELETE FROM addresses")
+    suspend fun clearAddresses()
 
     @Query("SELECT * FROM addresses ORDER BY isSelected DESC, id ASC")
     fun getAddresses(): Flow<List<AddressEntity>>
@@ -83,3 +71,4 @@ interface FrescutDao {
     @Query("UPDATE addresses SET isSelected = (id = :selectedId)")
     suspend fun selectAddress(selectedId: Int)
 }
+

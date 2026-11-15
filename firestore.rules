@@ -1,0 +1,456 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Security Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return (isSignedIn() && request.auth.uid == userId) ||
+             (request.auth == null && isEmulatorSessionId(userId));
+    }
+
+    function isEmulatorSessionId(uid) {
+      return uid is string && uid.size() >= 8 && uid.size() <= 128 && uid.matches('^emu_[a-zA-Z0-9_]+$');
+    }
+
+    function isCatalogOwner(ownerId) {
+      return isSignedIn() && (
+        (ownerId != '' && request.auth.uid == ownerId) ||
+        ('email' in request.auth.token &&
+         'email_verified' in request.auth.token &&
+         request.auth.token.email == 'omprakashseth.git@gmail.com' &&
+         request.auth.token.email_verified == true)
+      );
+    }
+
+    function isSeedOrCatalogOwner(data) {
+      return isCatalogOwner('') ||
+             ('ownerId' in data && (
+               (isSignedIn() && data.ownerId == request.auth.uid) ||
+               (request.auth == null && isEmulatorSessionId(data.ownerId))
+             ));
+    }
+
+    function isExistingCatalogOwner() {
+      return isCatalogOwner('') ||
+             (isSignedIn() && 'ownerId' in existing() && existing().ownerId == request.auth.uid);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprint: Product
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+        'name', 'category', 'subcategory', 'pricePerKg', 'price', 'originalPrice',
+        'discountPercent', 'deliveryTimeMins', 'image', 'available', 'weightInfo',
+        'piecesInfo', 'servingsInfo', 'description', 'isCurrentHit', 'isBudgetPick',
+        'isFlashDelivery', 'rating', 'proteinGrams', 'budgetSelectorEnabled',
+        'ownerId', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'name', 'category', 'subcategory', 'pricePerKg', 'price', 'originalPrice',
+        'discountPercent', 'deliveryTimeMins', 'image', 'available', 'weightInfo',
+        'piecesInfo', 'servingsInfo', 'description', 'isCurrentHit', 'isBudgetPick',
+        'isFlashDelivery', 'rating', 'reviewCount', 'proteinGrams', 'budgetSelectorEnabled',
+        'ownerId', 'createdAt', 'updatedAt'
+      ]) &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+      data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+      data.subcategory is string && data.subcategory.size() >= 1 && data.subcategory.size() <= 60 &&
+      data.pricePerKg is int && data.pricePerKg >= 1 && data.pricePerKg <= 100000 &&
+      data.price is int && data.price >= 1 && data.price <= 100000 &&
+      data.originalPrice is int && data.originalPrice >= 1 && data.originalPrice <= 100000 &&
+      data.discountPercent is int && data.discountPercent >= 0 && data.discountPercent <= 99 &&
+      data.deliveryTimeMins is int && data.deliveryTimeMins >= 1 && data.deliveryTimeMins <= 240 &&
+      data.image is string && data.image.size() >= 1 && data.image.size() <= 120 &&
+      data.available is bool &&
+      data.weightInfo is string && data.weightInfo.size() >= 1 && data.weightInfo.size() <= 60 &&
+      data.piecesInfo is string && data.piecesInfo.size() >= 1 && data.piecesInfo.size() <= 60 &&
+      data.servingsInfo is string && data.servingsInfo.size() >= 1 && data.servingsInfo.size() <= 60 &&
+      data.description is string && data.description.size() >= 1 && data.description.size() <= 600 &&
+      data.isCurrentHit is bool &&
+      data.isBudgetPick is bool &&
+      data.isFlashDelivery is bool &&
+      (data.rating is int || data.rating is float) && data.rating >= 0 && data.rating <= 5 &&
+      (!('reviewCount' in data) || (data.reviewCount is int && data.reviewCount >= 0)) &&
+      data.proteinGrams is int && data.proteinGrams >= 0 && data.proteinGrams <= 500 &&
+      data.budgetSelectorEnabled is bool &&
+      data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+      data.createdAt is timestamp && data.createdAt <= request.time &&
+      data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: Order
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+        'orderNumber', 'userId', 'items', 'total', 'itemTotal', 'deliveryFee',
+        'packagingCharge', 'address', 'deliveryInstructions', 'paymentMethod',
+        'status', 'time', 'timelineTimes', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'orderNumber', 'userId', 'items', 'total', 'itemTotal', 'deliveryFee',
+        'packagingCharge', 'address', 'houseNumber', 'floor', 'landmark', 'receiverPhone',
+        'latitude', 'longitude', 'deliveryInstructions', 'paymentMethod',
+        'status', 'time', 'timelineTimes', 'createdAt', 'updatedAt',
+        'rating', 'etaText', 'deliveryPartner', 'chillerTemp', 'route'
+      ]) &&
+      data.orderNumber is string && data.orderNumber.size() >= 1 && data.orderNumber.size() <= 40 &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+      data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map &&
+      data.total is int && data.total >= 0 && data.total <= 1000000 &&
+      data.itemTotal is int && data.itemTotal >= 0 && data.itemTotal <= 1000000 &&
+      data.deliveryFee is int && data.deliveryFee >= 0 && data.deliveryFee <= 10000 &&
+      data.packagingCharge is int && data.packagingCharge >= 0 && data.packagingCharge <= 10000 &&
+      data.address is string && data.address.size() >= 1 && data.address.size() <= 400 &&
+      (!('houseNumber' in data) || (data.houseNumber is string && data.houseNumber.size() <= 240)) &&
+      (!('floor' in data) || (data.floor is string && data.floor.size() <= 100)) &&
+      (!('landmark' in data) || (data.landmark is string && data.landmark.size() <= 200)) &&
+      (!('receiverPhone' in data) || (data.receiverPhone is string && data.receiverPhone.size() <= 40)) &&
+      (!('latitude' in data) || (data.latitude is int || data.latitude is float)) &&
+      (!('longitude' in data) || (data.longitude is int || data.longitude is float)) &&
+      data.deliveryInstructions is string && data.deliveryInstructions.size() <= 300 &&
+      data.paymentMethod is string && data.paymentMethod.size() >= 1 && data.paymentMethod.size() <= 100 &&
+      data.status is string && data.status in ['Order Placed', 'Processing', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'] &&
+      data.time is string && data.time.size() <= 80 &&
+      data.timelineTimes is list && data.timelineTimes.size() >= 1 && data.timelineTimes.size() <= 5 && data.timelineTimes[0] is string && data.timelineTimes[0].size() >= 1 &&
+      (!('rating' in data) || ((data.rating is int || data.rating is float) && data.rating >= 1 && data.rating <= 5)) &&
+      (!('etaText' in data) || (data.etaText is string && data.etaText.size() <= 120)) &&
+      (!('deliveryPartner' in data) || (data.deliveryPartner is string && data.deliveryPartner.size() <= 120)) &&
+      (!('chillerTemp' in data) || (data.chillerTemp is string && data.chillerTemp.size() <= 60)) &&
+      (!('route' in data) || (data.route is string && data.route.size() <= 300)) &&
+      data.createdAt is timestamp && data.createdAt <= request.time &&
+      data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+        'userId', 'name', 'email', 'phone', 'isProMember',
+        'selectedPaymentMethod', 'deliveryInstructions', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'name', 'email', 'phone', 'isProMember',
+        'selectedPaymentMethod', 'deliveryInstructions', 'createdAt', 'updatedAt'
+      ]) &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+      ((isSignedIn() && data.userId == request.auth.uid) || (request.auth == null && isEmulatorSessionId(data.userId))) &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+      data.email is string && data.email.size() <= 150 &&
+      data.phone is string && data.phone.size() <= 30 &&
+      data.isProMember is bool &&
+      data.selectedPaymentMethod is string && data.selectedPaymentMethod.size() >= 1 && data.selectedPaymentMethod.size() <= 100 &&
+      data.deliveryInstructions is string && data.deliveryInstructions.size() <= 300 &&
+      data.createdAt is timestamp && data.createdAt <= request.time &&
+      data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: UserAddress
+    function isValidUserAddress(data) {
+      return data.keys().hasAll([
+        'userId', 'label', 'areaName', 'fullAddress',
+        'deliveryMins', 'isSelected', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'label', 'areaName', 'fullAddress',
+        'houseNumber', 'floor', 'landmark', 'receiverPhone', 'latitude', 'longitude',
+        'deliveryMins', 'isSelected', 'createdAt', 'updatedAt'
+      ]) &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+      ((isSignedIn() && data.userId == request.auth.uid) || (request.auth == null && isEmulatorSessionId(data.userId))) &&
+      data.label is string && data.label.size() >= 1 && data.label.size() <= 60 &&
+      data.areaName is string && data.areaName.size() >= 1 && data.areaName.size() <= 120 &&
+      data.fullAddress is string && data.fullAddress.size() >= 1 && data.fullAddress.size() <= 400 &&
+      (!('houseNumber' in data) || (data.houseNumber is string && data.houseNumber.size() <= 240)) &&
+      (!('floor' in data) || (data.floor is string && data.floor.size() <= 100)) &&
+      (!('landmark' in data) || (data.landmark is string && data.landmark.size() <= 200)) &&
+      (!('receiverPhone' in data) || (data.receiverPhone is string && data.receiverPhone.size() <= 40)) &&
+      (!('latitude' in data) || (data.latitude is int || data.latitude is float)) &&
+      (!('longitude' in data) || (data.longitude is int || data.longitude is float)) &&
+      data.deliveryMins is int && data.deliveryMins >= 1 && data.deliveryMins <= 240 &&
+      data.isSelected is bool &&
+      data.createdAt is timestamp && data.createdAt <= request.time &&
+      data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: AppConfig (config / app_config)
+    function isValidConfig(data) {
+      return (!('searchChips' in data) || (data.searchChips is list && data.searchChips.size() <= 30 && (data.searchChips.size() == 0 || data.searchChips[0] is string))) &&
+             (!('referralCode' in data) || (data.referralCode is string && data.referralCode.size() <= 80)) &&
+             (!('storeName' in data) || (data.storeName is string && data.storeName.size() <= 100)) &&
+             (!('supportPhone' in data) || (data.supportPhone is string && data.supportPhone.size() <= 40)) &&
+             (!('minOrderAmount' in data) || (data.minOrderAmount is int && data.minOrderAmount >= 0 && data.minOrderAmount <= 100000)) &&
+             (!('deliveryTimeText' in data) || (data.deliveryTimeText is string && data.deliveryTimeText.size() <= 120)) &&
+             (!('deliveryFee' in data) || (data.deliveryFee is int && data.deliveryFee >= 0 && data.deliveryFee <= 10000)) &&
+             (!('handlingFee' in data) || (data.handlingFee is int && data.handlingFee >= 0 && data.handlingFee <= 10000)) &&
+             (!('storeLatitude' in data) || (data.storeLatitude is int || data.storeLatitude is float)) &&
+             (!('storeLongitude' in data) || (data.storeLongitude is int || data.storeLongitude is float)) &&
+             (!('deliveryRadiusKm' in data) || ((data.deliveryRadiusKm is int || data.deliveryRadiusKm is float) && data.deliveryRadiusKm >= 0)) &&
+             (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128));
+    }
+
+    // Validation Blueprint: Banner
+    function isValidBanner(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 240)) &&
+             (!('buttonText' in data) || (data.buttonText is string && data.buttonText.size() <= 80)) &&
+             (!('ctaText' in data) || (data.ctaText is string && data.ctaText.size() <= 80)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 240)) &&
+             (!('image' in data) || (data.image is string && data.image.size() <= 240)) &&
+             (!('active' in data) || data.active is bool) &&
+             (!('order' in data) || (data.order is int && data.order >= 0 && data.order <= 1000)) &&
+             (!('targetCategory' in data) || (data.targetCategory is string && data.targetCategory.size() <= 80)) &&
+             (!('highlights' in data) || (data.highlights is list && data.highlights.size() <= 10)) &&
+             (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128));
+    }
+
+    // Validation Blueprint: Coupon
+    function isValidCoupon(data) {
+      return data.code is string && data.code.size() >= 1 && data.code.size() <= 60 &&
+             data.discountPercent is int && data.discountPercent >= 1 && data.discountPercent <= 100 &&
+             (!('minOrder' in data) || (data.minOrder is int && data.minOrder >= 0 && data.minOrder <= 100000)) &&
+             (!('minOrderValue' in data) || (data.minOrderValue is int && data.minOrderValue >= 0 && data.minOrderValue <= 100000)) &&
+             data.active is bool &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 120)) &&
+             (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 240)) &&
+             (!('maxDiscount' in data) || (data.maxDiscount is int && data.maxDiscount >= 0 && data.maxDiscount <= 100000)) &&
+             (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128));
+    }
+
+    // Validation Blueprint: Recipe
+    function isValidRecipe(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             (!('time' in data) || (data.time is string && data.time.size() <= 60)) &&
+             (!('prepTime' in data) || (data.prepTime is string && data.prepTime.size() <= 60)) &&
+             (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() <= 60)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 240)) &&
+             (!('image' in data) || (data.image is string && data.image.size() <= 240)) &&
+             (!('active' in data) || data.active is bool) &&
+             (!('order' in data) || (data.order is int && data.order >= 0 && data.order <= 1000)) &&
+             (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128));
+    }
+
+    // Validation Blueprint: Review
+    function isValidReview(data) {
+      return ((('name' in data) && data.name is string && data.name.size() >= 1 && data.name.size() <= 120) ||
+              (('customerName' in data) && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120)) &&
+             ((('text' in data) && data.text is string && data.text.size() >= 1 && data.text.size() <= 600) ||
+              (('reviewText' in data) && data.reviewText is string && data.reviewText.size() >= 1 && data.reviewText.size() <= 600)) &&
+             (data.rating is int || data.rating is float) && data.rating >= 1 && data.rating <= 5 &&
+             (!('active' in data) || data.active is bool) &&
+             (!('order' in data) || (data.order is int && data.order >= 0 && data.order <= 1000)) &&
+             (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128));
+    }
+
+    // 1. Products Collection: Visible to all users; modifiable ONLY by owner
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+
+      allow create: if isValidId(productId) &&
+                       isValidProduct(incoming()) &&
+                       ((isSignedIn() && incoming().ownerId == request.auth.uid) ||
+                        (request.auth == null && isEmulatorSessionId(incoming().ownerId)));
+
+      allow update: if isSignedIn() &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming()) &&
+                       isCatalogOwner(existing().ownerId) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'category', 'subcategory', 'pricePerKg', 'price', 'originalPrice',
+                         'discountPercent', 'deliveryTimeMins', 'image', 'available', 'weightInfo',
+                         'piecesInfo', 'servingsInfo', 'description', 'isCurrentHit', 'isBudgetPick',
+                         'isFlashDelivery', 'rating', 'proteinGrams', 'budgetSelectorEnabled', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(productId) &&
+                       isCatalogOwner(existing().ownerId);
+    }
+
+    // 2. Orders Collection: Strictly isolated to the user who placed the order
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && (
+                    resource == null ||
+                    (isSignedIn() && existing().userId == request.auth.uid) ||
+                    (request.auth == null && isEmulatorSessionId(existing().userId))
+                  );
+
+      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) ||
+                     (request.auth == null && resource.data.userId is string);
+
+      allow create: if isValidId(orderId) &&
+                       !exists(/databases/$(database)/documents/orders/$(orderId)) &&
+                       isValidOrder(incoming()) &&
+                       incoming().orderNumber == orderId &&
+                       incoming().status == 'Order Placed' &&
+                       !('rating' in incoming()) && (
+                         (isSignedIn() && incoming().userId == request.auth.uid) ||
+                         (request.auth == null && isEmulatorSessionId(incoming().userId))
+                       );
+
+      allow update: if isValidId(orderId) &&
+                       isValidOrder(incoming()) &&
+                       ((isSignedIn() && existing().userId == request.auth.uid) ||
+                        (request.auth == null && isEmulatorSessionId(existing().userId))) &&
+                       incoming().orderNumber == existing().orderNumber &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'status', 'etaText', 'deliveryPartner', 'chillerTemp', 'route',
+                         'timelineTimes', 'rating', 'updatedAt'
+                       ]);
+
+      allow delete: if false;
+    }
+
+    // 2b. Counters Collection: Daily order sequence counter (counters/orders_DDMMYY); can only increment by +1
+    match /counters/{counterId} {
+      allow get: if isValidId(counterId) && (isSignedIn() || request.auth == null);
+      allow list: if false;
+
+      allow create: if isValidId(counterId) &&
+                       (isSignedIn() || request.auth == null) &&
+                       incoming().keys().hasAll(['count', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['count', 'updatedAt']) &&
+                       incoming().count is int &&
+                       incoming().count == 1 &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time;
+
+      allow update: if isValidId(counterId) &&
+                       (isSignedIn() || request.auth == null) &&
+                       incoming().keys().hasAll(['count', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['count', 'updatedAt']) &&
+                       incoming().count is int &&
+                       existing().count is int &&
+                       incoming().count == existing().count + 1 &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time;
+
+      allow delete: if false;
+    }
+
+    // 3. Users & Addresses Collection: Strictly isolated to the profile owner
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'email', 'phone', 'isProMember',
+                         'selectedPaymentMethod', 'deliveryInstructions', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /addresses/{addressId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(addressId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(addressId) &&
+                         isValidUserAddress(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(addressId) &&
+                         isValidUserAddress(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'label', 'areaName', 'fullAddress', 'deliveryMins', 'isSelected', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(addressId);
+      }
+    }
+
+    // 4. Coupons Collection: Publicly readable; writable only by owner
+    match /coupons/{couponId} {
+      allow get: if isValidId(couponId);
+      allow list: if true;
+      allow create: if isValidId(couponId) && isValidCoupon(incoming()) && isSeedOrCatalogOwner(incoming());
+      allow update: if isValidId(couponId) && isValidCoupon(incoming()) && isExistingCatalogOwner();
+      allow delete: if isValidId(couponId) && isExistingCatalogOwner();
+    }
+
+    // 5. Banners Collection: Publicly readable; writable only by owner
+    match /banners/{bannerId} {
+      allow get: if isValidId(bannerId);
+      allow list: if true;
+      allow create: if isValidId(bannerId) && isValidBanner(incoming()) && isSeedOrCatalogOwner(incoming());
+      allow update: if isValidId(bannerId) && isValidBanner(incoming()) && isExistingCatalogOwner();
+      allow delete: if isValidId(bannerId) && isExistingCatalogOwner();
+    }
+
+    // 6. Recipes Collection: Publicly readable; writable only by owner
+    match /recipes/{recipeId} {
+      allow get: if isValidId(recipeId);
+      allow list: if true;
+      allow create: if isValidId(recipeId) && isValidRecipe(incoming()) && isSeedOrCatalogOwner(incoming());
+      allow update: if isValidId(recipeId) && isValidRecipe(incoming()) && isExistingCatalogOwner();
+      allow delete: if isValidId(recipeId) && isExistingCatalogOwner();
+    }
+
+    // 7. Reviews Collection: Publicly readable; writable only by owner
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if true;
+      allow create: if isValidId(reviewId) && isValidReview(incoming()) && isSeedOrCatalogOwner(incoming());
+      allow update: if isValidId(reviewId) && isValidReview(incoming()) && isExistingCatalogOwner();
+      allow delete: if isValidId(reviewId) && isExistingCatalogOwner();
+    }
+
+    // 8. Config Collection: Publicly readable; writable only by owner
+    match /config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow create: if isValidId(configId) && isValidConfig(incoming()) && isSeedOrCatalogOwner(incoming());
+      allow update: if isValidId(configId) && isValidConfig(incoming()) && isExistingCatalogOwner();
+      allow delete: if isValidId(configId) && isExistingCatalogOwner();
+    }
+
+    // 9. Categories Collection: Publicly readable; writable only by owner
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isValidId(categoryId) &&
+                       incoming().name is string &&
+                       incoming().name.size() >= 1 &&
+                       incoming().name.size() <= 80 &&
+                       isSeedOrCatalogOwner(incoming());
+      allow update: if isValidId(categoryId) && isExistingCatalogOwner();
+      allow delete: if isValidId(categoryId) && isExistingCatalogOwner();
+    }
+  }
+}

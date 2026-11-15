@@ -1,24 +1,32 @@
 package com.example.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.AddressEntity
+import com.example.data.AppConfigModel
 import com.example.data.BudgetCalculator
 import com.example.data.CartProductItem
 import com.example.data.CategoryBudgetConfigEntity
 import com.example.data.CategoryCardModel
 import com.example.data.CouponOfferModel
+import com.example.data.CustomerReviewModel
 import com.example.data.FrescutRepository
 import com.example.data.OrderDomainModel
 import com.example.data.ProductEntity
+import com.example.data.PromotionalBannerModel
+import com.example.data.QuickNavCategoryItem
 import com.example.data.RecipeCardModel
 import com.example.data.RecommendationConfigEntity
 import com.example.data.SeedData
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,7 +46,6 @@ enum class SortOption(val label: String) {
 }
 
 enum class ProfileSubpage(val title: String) {
-    ADMIN_DASHBOARD("Admin Dashboard"),
     MY_ADDRESSES("My Addresses"),
     PAYMENT_METHODS("Payment Methods"),
     FRESCUT_PRO("FRESCUT Pro"),
@@ -56,31 +63,129 @@ class FrescutViewModel(
         viewModelScope.launch {
             repository.ensureSeeded()
         }
+        viewModelScope.launch {
+            repository.observeUserProfile()
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    Log.w("FrescutVM", "Error observing user profile", firestoreError ?: error)
+                }
+                .collect { profile ->
+                    if (profile != null) {
+                        if (profile.name.isNotBlank()) _userName.value = profile.name
+                        _userPhone.value = profile.phone
+                        if (profile.email.isNotBlank()) _userEmail.value = profile.email
+                        _isProMember.value = profile.isProMember
+                        _selectedPaymentMethod.value = "Cash on Delivery"
+                        _deliveryInstructions.value = profile.deliveryInstructions
+                    }
+                }
+        }
     }
 
-    val allProducts: StateFlow<List<ProductEntity>> = repository.productsFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = SeedData.initialProducts
-    )
+    val allProducts: StateFlow<List<ProductEntity>> = repository.productsFlow
+        .catch { error ->
+            val firestoreError = generateSequence(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            Log.w("FrescutVM", "Error observing products", firestoreError ?: error)
+            emit(SeedData.initialProducts)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SeedData.initialProducts
+        )
 
-    val cartProducts: StateFlow<List<CartProductItem>> = repository.cartProductsFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val cartProducts: StateFlow<List<CartProductItem>> = repository.cartProductsFlow
+        .catch { error ->
+            val firestoreError = generateSequence(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            Log.w("FrescutVM", "Error observing cart products", firestoreError ?: error)
+            emit(emptyList())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
-    val orders: StateFlow<List<OrderDomainModel>> = repository.ordersFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val orders: StateFlow<List<OrderDomainModel>> = repository.ordersFlow
+        .catch { error ->
+            val firestoreError = generateSequence(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            Log.w("FrescutVM", "Error observing user orders", firestoreError ?: error)
+            emit(emptyList())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
-    val addresses: StateFlow<List<AddressEntity>> = repository.addressesFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = SeedData.initialAddresses
-    )
+    val addresses: StateFlow<List<AddressEntity>> = repository.addressesFlow
+        .catch { error ->
+            val firestoreError = generateSequence(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            Log.w("FrescutVM", "Error observing user addresses", firestoreError ?: error)
+            emit(emptyList())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val activeCoupons: StateFlow<List<CouponOfferModel>> = repository.observeActiveCoupons()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val banners: StateFlow<List<PromotionalBannerModel>> = repository.observeBanners()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val recipes: StateFlow<List<RecipeCardModel>> = repository.observeRecipes()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val reviews: StateFlow<List<CustomerReviewModel>> = repository.observeReviews()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val appConfig: StateFlow<AppConfigModel> = repository.observeAppConfig()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AppConfigModel()
+        )
+
+    val quickCategories: StateFlow<List<QuickNavCategoryItem>> = repository.observeQuickCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SeedData.defaultQuickCategories
+        )
 
     val categoryBudgetConfigs: StateFlow<List<CategoryBudgetConfigEntity>> =
         repository.categoryBudgetConfigsFlow.stateIn(
@@ -134,20 +239,24 @@ class FrescutViewModel(
     private val _activeProfileSubpage = MutableStateFlow<ProfileSubpage?>(null)
     val activeProfileSubpage: StateFlow<ProfileSubpage?> = _activeProfileSubpage.asStateFlow()
 
-    private val _userName = MutableStateFlow("Omprakash Seth")
+    private val _userName = MutableStateFlow("FRESCUT Customer")
     val userName: StateFlow<String> = _userName.asStateFlow()
 
-    private val _userPhone = MutableStateFlow("+91 98610 45210")
+    private val _userPhone = MutableStateFlow("")
     val userPhone: StateFlow<String> = _userPhone.asStateFlow()
 
-    private val _userEmail = MutableStateFlow("omprakash@frescut.in")
+    private val _userEmail = MutableStateFlow("")
     val userEmail: StateFlow<String> = _userEmail.asStateFlow()
 
-    private val _isProMember = MutableStateFlow(true)
+    private val _isProMember = MutableStateFlow(false)
     val isProMember: StateFlow<Boolean> = _isProMember.asStateFlow()
 
-    private val _selectedPaymentMethod = MutableStateFlow("UPI (Google Pay / PhonePe)")
+    private val _deliveryInstructions = MutableStateFlow("")
+    val deliveryInstructions: StateFlow<String> = _deliveryInstructions.asStateFlow()
+
+    private val _selectedPaymentMethod = MutableStateFlow("Cash on Delivery")
     val selectedPaymentMethod: StateFlow<String> = _selectedPaymentMethod.asStateFlow()
+
 
     // Search & Modals state
     private val _isSearchOverlayOpen = MutableStateFlow(false)
@@ -170,6 +279,9 @@ class FrescutViewModel(
 
     private val _isLocationSheetOpen = MutableStateFlow(false)
     val isLocationSheetOpen: StateFlow<Boolean> = _isLocationSheetOpen.asStateFlow()
+
+    private val _isAddressScreenOpen = MutableStateFlow(false)
+    val isAddressScreenOpen: StateFlow<Boolean> = _isAddressScreenOpen.asStateFlow()
 
     private val _isNotificationSheetOpen = MutableStateFlow(false)
     val isNotificationSheetOpen: StateFlow<Boolean> = _isNotificationSheetOpen.asStateFlow()
@@ -304,15 +416,6 @@ class FrescutViewModel(
         _isBottomNavVisible.value = true
     }
 
-    fun openAdminDashboardFromAnywhere() {
-        _selectedProductForDetail.value = null
-        _isCartOpen.value = false
-        _isSearchOverlayOpen.value = false
-        _currentTab.value = MainNavTab.PROFILE
-        _activeProfileSubpage.value = ProfileSubpage.ADMIN_DASHBOARD
-        _isBottomNavVisible.value = true
-    }
-
     fun openSearchOverlay(initialQuery: String = "") {
         _searchQuery.value = initialQuery
         _isSearchOverlayOpen.value = true
@@ -356,6 +459,15 @@ class FrescutViewModel(
 
     fun closeLocationSheet() {
         _isLocationSheetOpen.value = false
+    }
+
+    fun openAddressScreen() {
+        _isLocationSheetOpen.value = false
+        _isAddressScreenOpen.value = true
+    }
+
+    fun closeAddressScreen() {
+        _isAddressScreenOpen.value = false
     }
 
     fun openNotificationSheet() {
@@ -419,7 +531,30 @@ class FrescutViewModel(
     fun removeProductFromCart(productId: String) {
         viewModelScope.launch {
             repository.setCartQuantity(productId = productId, newQuantity = 0)
+            showToast("Item removed from cart")
         }
+    }
+
+    fun adjustCartItemBudget(item: CartProductItem, deltaInr: Int) {
+        val catConfig = getCategoryBudgetConfig(item.product.category)
+        val currentBudget = item.selectedBudget ?: item.product.price
+        val nextBudget = (currentBudget + deltaInr).coerceAtLeast(catConfig.minBudget)
+        val nextGrams = BudgetCalculator.calculateEstimatedGrams(
+            selectedBudget = nextBudget,
+            pricePerKg = item.product.effectivePricePerKg
+        )
+        viewModelScope.launch {
+            repository.setCartQuantity(
+                productId = item.product.id,
+                newQuantity = item.quantity.coerceAtLeast(1),
+                selectedBudget = nextBudget,
+                estimatedGrams = nextGrams
+            )
+        }
+    }
+
+    fun updateDeliveryInstructions(instructions: String) {
+        _deliveryInstructions.value = instructions
     }
 
     fun toggleFavorite(product: ProductEntity) {
@@ -431,44 +566,20 @@ class FrescutViewModel(
         }
     }
 
-    fun updateCategoryBudgetConfig(category: String, minBudget: Int, incrementAmount: Int) {
-        viewModelScope.launch {
-            repository.updateCategoryBudgetConfig(
-                CategoryBudgetConfigEntity(
-                    category = category,
-                    minBudget = minBudget.coerceAtLeast(10),
-                    incrementAmount = incrementAmount.coerceAtLeast(5)
-                )
-            )
-            showToast("Saved $category budget settings (Min ₹$minBudget, +₹$incrementAmount)")
-        }
-    }
-
-    fun updateRecommendationConfig(config: RecommendationConfigEntity) {
-        viewModelScope.launch {
-            repository.updateRecommendationConfig(config)
-            showToast("Updated Smart Recommendation settings")
-        }
-    }
-
-    fun updateProductBudgetSettings(productId: String, pricePerKg: Int, enabled: Boolean) {
-        viewModelScope.launch {
-            repository.updateProductBudgetSettings(
-                productId = productId,
-                pricePerKg = pricePerKg.coerceAtLeast(50),
-                enabled = enabled
-            )
-            showToast("Updated product pricing & budget selector")
-        }
-    }
-
     fun applyCouponCode(code: String) {
-        val found = SeedData.coupons.find { it.code.equals(code.trim(), ignoreCase = true) }
+        val trimmed = code.trim()
+        if (trimmed.isEmpty()) {
+            showToast("Please enter a coupon code")
+            return
+        }
+        val found = activeCoupons.value.find {
+            it.active && it.code.equals(trimmed, ignoreCase = true)
+        }
         if (found != null) {
             _appliedCoupon.value = found
             showToast("Coupon ${found.code} (${found.discountPercent}% OFF) applied!")
         } else {
-            showToast("Invalid coupon code. Try FRESH20")
+            showToast("Invalid or inactive coupon code")
         }
     }
 
@@ -485,10 +596,74 @@ class FrescutViewModel(
     }
 
     fun addAddress(label: String, areaName: String, fullAddress: String) {
+        val cleanArea = areaName.trim()
+        val cleanFull = fullAddress.trim()
+        if (cleanArea.isEmpty() || cleanFull.isEmpty()) {
+            showToast("Please enter both area name and full address")
+            return
+        }
         viewModelScope.launch {
-            repository.addNewAddress(label, areaName, fullAddress)
-            _isLocationSheetOpen.value = false
-            showToast("New address saved")
+            try {
+                repository.addNewAddress(label, cleanArea, cleanFull)
+                _isLocationSheetOpen.value = false
+                _isAddressScreenOpen.value = false
+                showToast("Address details saved")
+            } catch (e: Exception) {
+                showToast("Could not save address: ${e.localizedMessage ?: "Error"}")
+            }
+        }
+    }
+
+    fun saveAddressDetails(
+        label: String,
+        houseAndArea: String,
+        floor: String,
+        landmark: String,
+        receiverPhone: String,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ) {
+        val cleanHouseArea = houseAndArea.trim()
+        val cleanFloor = floor.trim()
+        val cleanLandmark = landmark.trim()
+        val cleanPhone = receiverPhone.trim()
+        if (cleanHouseArea.isEmpty() || cleanPhone.isEmpty()) {
+            showToast("House number / Area and Receiver's phone number are required")
+            return
+        }
+        val shortArea = cleanHouseArea.split(",")
+            .map { it.trim() }
+            .lastOrNull { it.isNotEmpty() }
+            ?.take(60)
+            ?: cleanHouseArea.take(60)
+        val parts = buildList {
+            add(cleanHouseArea)
+            if (cleanFloor.isNotEmpty()) add(cleanFloor)
+            if (cleanLandmark.isNotEmpty()) add(cleanLandmark)
+        }
+        val formattedFull = parts.joinToString(", ")
+        viewModelScope.launch {
+            try {
+                repository.addNewAddress(
+                    label = label,
+                    areaName = shortArea,
+                    fullAddress = formattedFull,
+                    houseNumber = cleanHouseArea,
+                    floor = cleanFloor,
+                    landmark = cleanLandmark,
+                    receiverPhone = cleanPhone,
+                    latitude = latitude,
+                    longitude = longitude
+                )
+                if (_userPhone.value.isBlank()) {
+                    _userPhone.value = cleanPhone
+                }
+                _isAddressScreenOpen.value = false
+                _isLocationSheetOpen.value = false
+                showToast("Address details saved")
+            } catch (e: Exception) {
+                showToast("Could not save address: ${e.localizedMessage ?: "Error"}")
+            }
         }
     }
 
@@ -496,24 +671,65 @@ class FrescutViewModel(
         _userName.value = name
         _userPhone.value = phone
         _userEmail.value = email
-        showToast("Profile updated")
+        viewModelScope.launch {
+            try {
+                repository.updateUserProfileInCloud(
+                    name = name,
+                    phone = phone,
+                    email = email,
+                    isProMember = _isProMember.value,
+                    selectedPaymentMethod = _selectedPaymentMethod.value,
+                    deliveryInstructions = _deliveryInstructions.value
+                )
+                showToast("Profile synced to cloud")
+            } catch (e: Exception) {
+                showToast("Profile updated locally")
+            }
+        }
     }
 
     fun toggleProMembership() {
         _isProMember.value = !_isProMember.value
         val msg = if (_isProMember.value) "FRESCUT Pro activated!" else "FRESCUT Pro paused"
+        viewModelScope.launch {
+            try {
+                repository.updateUserProfileInCloud(
+                    name = _userName.value,
+                    phone = _userPhone.value,
+                    email = _userEmail.value,
+                    isProMember = _isProMember.value,
+                    selectedPaymentMethod = _selectedPaymentMethod.value,
+                    deliveryInstructions = _deliveryInstructions.value
+                )
+            } catch (unused: Exception) {
+            }
+        }
         showToast(msg)
     }
 
     fun selectPaymentMethod(method: String) {
         _selectedPaymentMethod.value = method
+        viewModelScope.launch {
+            try {
+                repository.updateUserProfileInCloud(
+                    name = _userName.value,
+                    phone = _userPhone.value,
+                    email = _userEmail.value,
+                    isProMember = _isProMember.value,
+                    selectedPaymentMethod = method,
+                    deliveryInstructions = _deliveryInstructions.value
+                )
+            } catch (unused: Exception) {
+            }
+        }
         showToast("Payment method set to $method")
     }
 
     fun reorder(order: OrderDomainModel) {
         viewModelScope.launch {
             repository.reorderItems(order)
-            showToast("${order.items.size} items from ${order.orderId} added to cart")
+            val countLabel = if (order.items.size == 1) "1 item" else "${order.items.size} items"
+            showToast("$countLabel from ${order.orderId} added to cart")
             _isCartOpen.value = true
         }
     }
@@ -521,28 +737,92 @@ class FrescutViewModel(
     fun checkoutAndPlaceOrder() {
         val currentCart = cartProducts.value
         if (currentCart.isEmpty()) return
+        val selectedAddr = addresses.value.find { it.isSelected } ?: addresses.value.firstOrNull()
+        val addressText = selectedAddr?.fullAddress?.trim().orEmpty()
+        if (addressText.isEmpty()) {
+            _isAddressScreenOpen.value = true
+            showToast("Please add delivery address details")
+            return
+        }
+
         val subtotal = currentCart.sumOf { it.lineTotal }
-        val coupon = _appliedCoupon.value
+        val coupon = _appliedCoupon.value?.takeIf { applied ->
+            activeCoupons.value.any { it.active && it.code.equals(applied.code, ignoreCase = true) }
+        }
         val couponDisc = if (coupon != null && subtotal >= coupon.minOrderValue) {
             ((subtotal * coupon.discountPercent) / 100).coerceAtMost(coupon.maxDiscount)
         } else {
             0
         }
-        val deliveryFee = if (_isProMember.value || subtotal >= 499) 0 else 39
+        val config = appConfig.value
+        if (config.deliveryRadiusKm > 0.0) {
+            val custLat = selectedAddr?.latitude
+            val custLng = selectedAddr?.longitude
+            if (custLat == null || custLng == null) {
+                showToast("Abhi hum is area me delivery nahi karte")
+                return
+            }
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(
+                config.storeLatitude,
+                config.storeLongitude,
+                custLat,
+                custLng,
+                results
+            )
+            val distanceKm = results[0].toDouble() / 1000.0
+            if (distanceKm > config.deliveryRadiusKm) {
+                showToast("Abhi hum is area me delivery nahi karte")
+                return
+            }
+        }
+        val deliveryFee = (config.deliveryFee ?: 0).coerceAtLeast(0)
+        val handlingFee = (config.handlingFee ?: 0).coerceAtLeast(0)
+        val houseNumberVal = selectedAddr?.houseNumber?.takeIf { it.isNotBlank() } ?: addressText
+        val floorVal = selectedAddr?.floor.orEmpty()
+        val landmarkVal = selectedAddr?.landmark.orEmpty()
+        val receiverPhoneVal = selectedAddr?.receiverPhone?.takeIf { it.isNotBlank() } ?: _userPhone.value
 
         viewModelScope.launch {
-            val newOrderId = repository.placeOrder(
-                cartItems = currentCart,
-                discountAmount = couponDisc,
-                deliveryFee = deliveryFee
-            )
-            _appliedCoupon.value = null
-            _isCartOpen.value = false
-            if (newOrderId.isNotEmpty()) {
-                _currentTab.value = MainNavTab.ORDERS
-                _selectedOrderIdForDetail.value = newOrderId
-                _isBottomNavVisible.value = true
-                showToast("Order $newOrderId placed! Arriving in ~24 mins")
+            try {
+                val newOrderId = repository.placeOrder(
+                    cartItems = currentCart,
+                    discountAmount = couponDisc,
+                    deliveryFee = deliveryFee,
+                    handlingFee = handlingFee,
+                    addressText = addressText,
+                    houseNumber = houseNumberVal,
+                    floor = floorVal,
+                    landmark = landmarkVal,
+                    receiverPhone = receiverPhoneVal,
+                    latitude = selectedAddr?.latitude,
+                    longitude = selectedAddr?.longitude,
+                    deliveryInstructions = _deliveryInstructions.value,
+                    paymentMethod = _selectedPaymentMethod.value
+                )
+                _appliedCoupon.value = null
+                _isCartOpen.value = false
+                if (newOrderId.isNotEmpty()) {
+                    _selectedOrderStatusFilter.value = "All"
+                    _selectedOrderIdForDetail.value = null
+                    _currentTab.value = MainNavTab.ORDERS
+                    _isBottomNavVisible.value = true
+                    showToast("Order $newOrderId placed!")
+                }
+            } catch (e: Exception) {
+                showToast("Order failed: ${e.localizedMessage ?: "Please check connection"}")
+            }
+        }
+    }
+
+
+    fun rateOrder(orderId: String, ratingValue: Int) {
+        viewModelScope.launch {
+            try {
+                repository.rateOrder(orderId, ratingValue)
+                showToast("Thank you! Rated $ratingValue ★ for $orderId")
+            } catch (e: Exception) {
+                showToast("Could not save rating: ${e.localizedMessage ?: "Error"}")
             }
         }
     }
