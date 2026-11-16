@@ -35,11 +35,22 @@ class FrescutRepository(
         sessionUserId: String? = null
     ) : this(
         FirebaseFirestore.getInstance(
-            context.applicationContext.getString(R.string.firestore_database_id)
+            resolveFirestoreDatabaseId(context.applicationContext)
         ),
         dao,
         sessionUserId
     )
+
+    companion object {
+        fun resolveFirestoreDatabaseId(context: Context): String {
+            val resId = context.resources.getIdentifier("firestore_database_id", "string", context.packageName)
+            if (resId != 0) {
+                val fromRes = runCatching { context.getString(resId) }.getOrNull()
+                if (!fromRes.isNullOrBlank()) return fromRes
+            }
+            return "ai-studio-android-frescutu-7b78932a-3933-4c77-b2a3-33bb8d4cb7e6"
+        }
+    }
 
     private val auth = Firebase.auth
     private val localFavorites = MutableStateFlow<Set<String>>(emptySet())

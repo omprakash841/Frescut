@@ -158,7 +158,7 @@ private fun AuthenticatedFrescutApp(
         val appContext = context.applicationContext
         val roomDb = FrescutDatabase.getDatabase(appContext)
         val firestoreDb = FirebaseFirestore.getInstance(
-            appContext.getString(R.string.firestore_database_id)
+            FrescutRepository.resolveFirestoreDatabaseId(appContext)
         )
         FrescutRepository(
             db = firestoreDb,
