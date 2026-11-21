@@ -157,11 +157,8 @@ private fun AuthenticatedFrescutApp(
     val repository = remember(context, currentUserId) {
         val appContext = context.applicationContext
         val roomDb = FrescutDatabase.getDatabase(appContext)
-        val firestoreDb = FirebaseFirestore.getInstance(
-            FrescutRepository.resolveFirestoreDatabaseId(appContext)
-        )
         FrescutRepository(
-            db = firestoreDb,
+            context = appContext,
             dao = roomDb.frescutDao(),
             sessionUserId = currentUserId
         )
@@ -541,42 +538,6 @@ private fun AuthenticatedFrescutApp(
                 onAddAddress = { l, a, f -> viewModel.addAddress(l, a, f) },
                 onDismiss = { viewModel.closeLocationSheet() }
             )
-        }
-
-
-        // Crisp Toast Feedback Banner positioned above the bottom navigation bar
-        val isMainTabScreen = selectedProductForDetail == null &&
-            !isAddressScreenOpen &&
-            !isCartOpen &&
-            !isSearchOverlayOpen &&
-            !isNotificationSheetOpen
-        val toastBottomPadding = when {
-            isMainTabScreen && totalCartItemsCount > 0 -> 140.dp
-            else -> 84.dp
-        }
-        AnimatedVisibility(
-            visible = toastMessage != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = toastBottomPadding, start = 20.dp, end = 20.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = FrescutTextPrimary.copy(alpha = 0.94f),
-                shadowElevation = 6.dp
-            ) {
-                Text(
-                    text = toastMessage.orEmpty(),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.5.sp
-                    ),
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
-                )
-            }
         }
     }
 }

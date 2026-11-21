@@ -155,7 +155,8 @@ object SeedData {
         QuickNavCategoryItem(id = "Fish", label = "Fish", imageRes = R.drawable.img_cat_fish, order = 4),
         QuickNavCategoryItem(id = "Eggs", label = "Eggs", imageRes = R.drawable.img_cat_eggs, order = 5),
         QuickNavCategoryItem(id = "Ready to Cook", label = "Ready to Cook", imageRes = R.drawable.img_cat_ready_to_cook, order = 6),
-        QuickNavCategoryItem(id = "More", label = "More", isMoreTab = true, order = 7)
+        QuickNavCategoryItem(id = "Snacks", label = "Snacks", imageRes = R.drawable.img_cat_ready_to_cook, order = 7),
+        QuickNavCategoryItem(id = "More", label = "More", isMoreTab = true, order = 8)
     )
 
     val categories: List<CategoryCardModel> = listOf(

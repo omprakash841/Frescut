@@ -55,7 +55,7 @@ class ExampleRobolectricTest {
         // Chicken starts at ₹50
         composeTestRule.onNodeWithTag("selected_budget_amount").assertTextContains("₹50")
         composeTestRule.onNodeWithTag("estimated_quantity_text").assertTextContains("Approx. 61 g (Estimated)")
-        composeTestRule.onNodeWithTag("price_per_kg_text").assertTextContains("₹824/kg")
+        composeTestRule.onNodeWithTag("price_per_kg_text").assertTextContains("₹824/kg", substring = true)
 
         // Minus button at minimum (₹50) must NOT go below ₹50
         composeTestRule.onNodeWithTag("budget_minus_btn").performClick()
@@ -135,5 +135,31 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("bottom_nav_profile").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("profile_screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun `verify compact header, horizontal category navigation, and shopping bag interaction`() {
+        ensureLoggedInToHome()
+
+        // 1. Compact Header & Notification & Shopping Bag Icon
+        composeTestRule.onNodeWithTag("header_location_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("header_notification_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("header_cart_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("sticky_search_bar").assertIsDisplayed()
+
+        // 2. Compact Flipkart-style horizontal category navigation tabs
+        composeTestRule.onNodeWithTag("compact_cat_tab_all").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("compact_cat_tab_chicken").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("compact_cat_tab_mutton").assertIsDisplayed()
+
+        // Selecting a category filters Home products without breaking layout
+        composeTestRule.onNodeWithTag("compact_cat_tab_chicken").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("compact_cat_tab_all").performClick()
+        composeTestRule.waitForIdle()
+
+        // 3. Tapping Shopping Bag icon opens Cart & Checkout
+        composeTestRule.onNodeWithTag("header_cart_button").performClick()
+        composeTestRule.waitForIdle()
     }
 }

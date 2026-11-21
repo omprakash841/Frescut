@@ -24,39 +24,42 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 class FrescutRepository(
     private val db: FirebaseFirestore,
     private val dao: FrescutDao? = null,
-    private val sessionUserId: String? = null
+    private val sessionUserId: String? = null,
+    private val sessionUserName: String? = null,
+    private val sessionUserEmail: String? = null
 ) {
     constructor(
         context: Context,
         dao: FrescutDao? = null,
-        sessionUserId: String? = null
+        sessionUserId: String? = null,
+        sessionUserName: String? = null,
+        sessionUserEmail: String? = null
     ) : this(
         FirebaseFirestore.getInstance(
-            resolveFirestoreDatabaseId(context.applicationContext)
+            context.applicationContext.getString(R.string.firestore_database_id)
         ),
         dao,
-        sessionUserId
+        sessionUserId,
+        sessionUserName,
+        sessionUserEmail
     )
-
-    companion object {
-        fun resolveFirestoreDatabaseId(context: Context): String {
-            val resId = context.resources.getIdentifier("firestore_database_id", "string", context.packageName)
-            if (resId != 0) {
-                val fromRes = runCatching { context.getString(resId) }.getOrNull()
-                if (!fromRes.isNullOrBlank()) return fromRes
-            }
-            return "ai-studio-android-frescutu-7b78932a-3933-4c77-b2a3-33bb8d4cb7e6"
-        }
-    }
 
     private val auth = Firebase.auth
     private val localFavorites = MutableStateFlow<Set<String>>(emptySet())
+    private val userProfileMutex = Mutex()
 
     private fun effectiveUserIdOrNull(): String? {
         return auth.currentUser?.uid ?: sessionUserId?.takeIf { it.isNotBlank() }
+    }
+
+    private fun isLocalGuestSession(): Boolean {
+        return auth.currentUser == null && sessionUserId?.startsWith("emu_guest_") == true
     }
 
     private fun requireUserId(): String {
@@ -76,7 +79,7 @@ class FrescutRepository(
     // Live Products from Cloud Firestore, backed by Room offline cache
     fun observeProducts(): Flow<List<ProductEntity>> = flow {
         val uid = effectiveUserIdOrNull()
-        if (uid == null) {
+        if (uid == null || isLocalGuestSession()) {
             if (dao != null) {
                 emitAll(dao.getAllProducts())
             } else {
@@ -156,6 +159,10 @@ class FrescutRepository(
     // Live Orders read strictly from Cloud Firestore (orders where userId == current user uid)
     fun observeUserOrders(): Flow<List<OrderDomainModel>> = flow {
         val uid = requireUserId()
+        if (isLocalGuestSession()) {
+            emit(emptyList())
+            return@flow
+        }
         val path = "orders"
         emitAll(
             db.collection(path)
@@ -190,6 +197,14 @@ class FrescutRepository(
     // Live User Addresses from Cloud Firestore (/users/{uid}/addresses)
     fun observeUserAddresses(): Flow<List<AddressEntity>> = flow {
         val uid = requireUserId()
+        if (isLocalGuestSession()) {
+            if (dao != null) {
+                emitAll(dao.getAddresses())
+            } else {
+                emit(emptyList())
+            }
+            return@flow
+        }
         val path = "users/$uid/addresses"
         emitAll(
             db.collection("users")
@@ -431,7 +446,7 @@ class FrescutRepository(
 
     fun observeUserProfile(): Flow<FirestoreUserProfile?> = flow {
         val currentUid = effectiveUserIdOrNull()
-        if (currentUid == null) {
+        if (currentUid == null || isLocalGuestSession()) {
             emit(null)
             return@flow
         }
@@ -483,6 +498,7 @@ class FrescutRepository(
 
         val uid = effectiveUserIdOrNull() ?: return
         val currentUser = auth.currentUser
+        if (currentUser == null && isLocalGuestSession()) return
 
         // 2. Upload SeedData products to Firestore ONLY once when the products collection is completely empty
         val productsPath = "products"
@@ -628,46 +644,50 @@ class FrescutRepository(
 
         // 3. Initialize UserProfile document in /users/{uid} with empty phone & empty deliveryInstructions
         val userDocPath = "users/$uid"
-        try {
-            val userDocRef = db.collection("users").document(uid)
-            val userDoc = userDocRef.get().await()
-            if (!userDoc.exists()) {
-                val defaultName = currentUser?.displayName?.takeIf { it.isNotBlank() } ?: "FRESCUT Customer"
-                val defaultEmail = currentUser?.email ?: ""
-                val defaultPhone = currentUser?.phoneNumber ?: ""
-                val profilePayload = mapOf(
-                    "userId" to uid,
-                    "name" to defaultName,
-                    "email" to defaultEmail,
-                    "phone" to defaultPhone,
-                    "isProMember" to false,
-                    "selectedPaymentMethod" to "Cash on Delivery",
-                    "deliveryInstructions" to "",
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-                userDocRef.set(profilePayload).await()
-            } else {
-                // Clean up any legacy seeded phone or delivery note from earlier versions
-                val existingPhone = userDoc.getString("phone") ?: ""
-                val existingNote = userDoc.getString("deliveryInstructions") ?: ""
-                val updates = mutableMapOf<String, Any>()
-                if (existingPhone.contains("98610") && existingPhone.contains("45210")) {
-                    updates["phone"] = ""
+        userProfileMutex.withLock {
+            try {
+                val userDocRef = db.collection("users").document(uid)
+                val userDoc = userDocRef.get().await()
+                if (!userDoc.exists()) {
+                    val defaultName = currentUser?.displayName?.takeIf { it.isNotBlank() }
+                        ?: sessionUserName?.takeIf { it.isNotBlank() }
+                        ?: "FRESCUT Customer"
+                    val defaultEmail = currentUser?.email?.takeIf { it.isNotBlank() }
+                        ?: sessionUserEmail.orEmpty()
+                    val defaultPhone = currentUser?.phoneNumber ?: ""
+                    val profilePayload = mapOf(
+                        "userId" to uid,
+                        "name" to defaultName.take(100),
+                        "email" to defaultEmail.take(150),
+                        "phone" to defaultPhone.take(30),
+                        "isProMember" to false,
+                        "selectedPaymentMethod" to "Cash on Delivery",
+                        "deliveryInstructions" to "",
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                    userDocRef.set(profilePayload).await()
+                } else {
+                    // Clean up any legacy seeded phone or delivery note from earlier versions
+                    val existingPhone = userDoc.getString("phone") ?: ""
+                    val existingNote = userDoc.getString("deliveryInstructions") ?: ""
+                    val updates = mutableMapOf<String, Any>()
+                    if (existingPhone.contains("98610") && existingPhone.contains("45210")) {
+                        updates["phone"] = ""
+                    }
+                    if (existingNote.startsWith("Ring bell once, hand over cold-chain")) {
+                        updates["deliveryInstructions"] = ""
+                    }
+                    if (updates.isNotEmpty()) {
+                        updates["updatedAt"] = FieldValue.serverTimestamp()
+                        userDocRef.update(updates).await()
+                    }
                 }
-                if (existingNote.startsWith("Ring bell once, hand over cold-chain")) {
-                    updates["deliveryInstructions"] = ""
-                }
-                if (updates.isNotEmpty()) {
-                    updates["updatedAt"] = FieldValue.serverTimestamp()
-                    userDocRef.update(updates).await()
-                }
-
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.WRITE, userDocPath)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, userDocPath)
         }
 
         // 4. Clean up any legacy seeded demo addresses (addr_1, addr_2) from earlier runs so new/existing users have no fake addresses
@@ -798,47 +818,51 @@ class FrescutRepository(
         deliveryInstructions: String
     ) {
         val currentUid = effectiveUserIdOrNull() ?: return
+        if (isLocalGuestSession()) return
         val docRef = db.collection("users").document(currentUid)
-        try {
-            val snap = docRef.get().await()
-            if (snap.exists()) {
-                docRef.update(
-                    mapOf(
-                        "name" to name.take(100),
-                        "phone" to phone.take(30),
-                        "email" to email.take(150),
-                        "isProMember" to isProMember,
-                        "selectedPaymentMethod" to selectedPaymentMethod.take(100),
-                        "deliveryInstructions" to deliveryInstructions.take(300),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
-            } else {
-                docRef.set(
-                    mapOf(
-                        "userId" to currentUid,
-                        "name" to name.take(100),
-                        "phone" to phone.take(30),
-                        "email" to email.take(150),
-                        "isProMember" to isProMember,
-                        "selectedPaymentMethod" to selectedPaymentMethod.take(100),
-                        "deliveryInstructions" to deliveryInstructions.take(300),
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+        userProfileMutex.withLock {
+            try {
+                val snap = docRef.get().await()
+                if (snap.exists()) {
+                    docRef.update(
+                        mapOf(
+                            "name" to name.trim().ifBlank { "FRESCUT Customer" }.take(100),
+                            "phone" to phone.trim().take(30),
+                            "email" to email.trim().take(150),
+                            "isProMember" to isProMember,
+                            "selectedPaymentMethod" to selectedPaymentMethod.ifBlank { "Cash on Delivery" }.take(100),
+                            "deliveryInstructions" to deliveryInstructions.take(300),
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                } else {
+                    docRef.set(
+                        mapOf(
+                            "userId" to currentUid,
+                            "name" to name.trim().ifBlank { "FRESCUT Customer" }.take(100),
+                            "phone" to phone.trim().take(30),
+                            "email" to email.trim().take(150),
+                            "isProMember" to isProMember,
+                            "selectedPaymentMethod" to selectedPaymentMethod.ifBlank { "Cash on Delivery" }.take(100),
+                            "deliveryInstructions" to deliveryInstructions.take(300),
+                            "createdAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.WRITE, docRef.path)
+                throw e
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, docRef.path)
-            throw e
         }
     }
 
     suspend fun selectAddress(addressId: Int) {
         dao?.selectAddress(addressId)
         val uid = effectiveUserIdOrNull() ?: return
+        if (isLocalGuestSession()) return
         val colRef = db.collection("users").document(uid).collection("addresses")
         try {
             val allDocs = colRef.get().await()
@@ -898,6 +922,7 @@ class FrescutRepository(
         )
 
         val currentUid = effectiveUserIdOrNull() ?: return
+        if (isLocalGuestSession()) return
         val colRef = db.collection("users").document(currentUid).collection("addresses")
         val docId = "addr_${System.currentTimeMillis()}"
         val docRef = colRef.document(docId)

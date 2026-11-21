@@ -41,8 +41,7 @@ service cloud.firestore {
     }
 
     function isExistingCatalogOwner() {
-      return isCatalogOwner('') ||
-             (isSignedIn() && 'ownerId' in existing() && existing().ownerId == request.auth.uid);
+      return isSeedOrCatalogOwner(existing());
     }
 
     function isValidId(id) {
@@ -297,7 +296,11 @@ service cloud.firestore {
                   );
 
       allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) ||
-                     (request.auth == null && resource.data.userId is string);
+                     (request.auth == null &&
+                      resource.data.userId is string &&
+                      resource.data.userId >= 'emu_' &&
+                      resource.data.userId < 'emv_' &&
+                      isEmulatorSessionId(resource.data.userId));
 
       allow create: if isValidId(orderId) &&
                        !exists(/databases/$(database)/documents/orders/$(orderId)) &&
@@ -364,10 +367,9 @@ service cloud.firestore {
                        isValidId(userId) &&
                        isValidUserProfile(incoming()) &&
                        incoming().userId == existing().userId &&
-                       incoming().createdAt == existing().createdAt &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'name', 'email', 'phone', 'isProMember',
-                         'selectedPaymentMethod', 'deliveryInstructions', 'updatedAt'
+                         'selectedPaymentMethod', 'deliveryInstructions', 'createdAt', 'updatedAt'
                        ]);
 
       allow delete: if isOwner(userId) && isValidId(userId);
@@ -386,9 +388,11 @@ service cloud.firestore {
                          isValidId(addressId) &&
                          isValidUserAddress(incoming()) &&
                          incoming().userId == existing().userId &&
-                         incoming().createdAt == existing().createdAt &&
                          incoming().diff(existing()).affectedKeys().hasOnly([
-                           'label', 'areaName', 'fullAddress', 'deliveryMins', 'isSelected', 'updatedAt'
+                           'label', 'areaName', 'fullAddress',
+                           'houseNumber', 'floor', 'landmark', 'receiverPhone',
+                           'latitude', 'longitude', 'deliveryMins', 'isSelected',
+                           'createdAt', 'updatedAt'
                          ]);
 
         allow delete: if isOwner(userId) && isValidId(userId) && isValidId(addressId);

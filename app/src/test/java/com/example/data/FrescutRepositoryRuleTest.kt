@@ -112,7 +112,26 @@ class FrescutRepositoryRuleTest : FirestoreEmulatorTestBase() {
     fun `new guest user starts with zero orders, places order to Firestore, and unauthorized session is rejected`() = runBlocking {
         auth.signOut()
         val guestUid = "emu_guest_${System.currentTimeMillis()}"
-        val guestRepo = FrescutRepository(db = firestore, dao = null, sessionUserId = guestUid)
+        val guestRepo = FrescutRepository(
+            db = firestore,
+            dao = null,
+            sessionUserId = guestUid,
+            sessionUserName = "Guest Customer",
+            sessionUserEmail = "guest@frescut.in"
+        )
+
+        // Verify ensureSeeded + updateUserProfileInCloud for emu_guest_* succeeds without PERMISSION_DENIED
+        withTimeout(DEFAULT_TIMEOUT_MS * 2) {
+            guestRepo.ensureSeeded()
+            guestRepo.updateUserProfileInCloud(
+                name = "Guest Customer",
+                phone = "",
+                email = "guest@frescut.in",
+                isProMember = false,
+                selectedPaymentMethod = "Cash on Delivery",
+                deliveryInstructions = ""
+            )
+        }
 
         // 1. New guest user initially has an empty My Orders list AND empty addresses list in Firestore
         val initialOrders = withTimeout(FLOW_TIMEOUT_MS) {
@@ -165,9 +184,25 @@ class FrescutRepositoryRuleTest : FirestoreEmulatorTestBase() {
         val invalidRepo = FrescutRepository(db = firestore, dao = null, sessionUserId = "invalid_session_id")
         try {
             withTimeout(FLOW_TIMEOUT_MS) {
-                invalidRepo.observeUserOrders().first()
+                invalidRepo.observeUserAddresses().first()
             }
-            fail("Expected PERMISSION_DENIED for invalid unauthenticated session ID")
+            fail("Expected PERMISSION_DENIED for invalid unauthenticated session ID on addresses")
+        } catch (e: Exception) {
+            val fsError = e.unwrapFirestoreException()
+            assertNotNull(fsError)
+            assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, fsError?.code)
+        }
+
+        try {
+            withTimeout(DEFAULT_TIMEOUT_MS) {
+                invalidRepo.placeOrder(
+                    cartItems = listOf(cartItem),
+                    discountAmount = 0,
+                    deliveryFee = 0,
+                    addressText = "Unauthorized Address"
+                )
+            }
+            fail("Expected PERMISSION_DENIED when placing order with invalid unauthenticated session ID")
         } catch (e: Exception) {
             val fsError = e.unwrapFirestoreException()
             assertNotNull(fsError)

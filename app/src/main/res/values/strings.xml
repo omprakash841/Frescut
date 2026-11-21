@@ -1,25 +1,161 @@
 <resources>
     <string name="app_name">FRESCUT</string>
-    <string name="search_hint">Search for \'Chicken, Fish, Mutton…</string>
-    <string name="delivery_in">Delivery in</string>
-    <string name="delivery_time_30_min">30 min ⚡</string>
-    <string name="frescut_pro">FRESCUT Pro</string>
-    <string name="our_current_hits">Our Current Hits</string>
-    <string name="current_hits_subtitle">Here’s what everyone’s eating!</string>
-    <string name="cravings_on_budget">Cravings on a Budget</string>
-    <string name="cravings_subtitle">Everyday fresh cuts under ₹299</string>
-    <string name="shop_by_category">Shop by Category</string>
-    <string name="shop_by_category_subtitle">Freshest meats and much more!</string>
-    <string name="crafted_for_recipes">Crafted for Your Recipes</string>
-    <string name="crafted_recipes_subtitle">Chef-selected cuts for iconic dishes</string>
-    <string name="customer_reviews">Customer Reviews</string>
-    <string name="customer_reviews_subtitle">Trusted by 50,000+ meat lovers daily</string>
-    <string name="view_all">View All</string>
-    <string name="view_cart">View Cart</string>
-    <string name="my_orders">My Orders</string>
-    <string name="order_details">Order Details</string>
+
+    <!-- Auth Screen -->
+    <string name="auth_brand_title">FRESCUT</string>
+    <string name="auth_brand_subtitle">Fresh Meat &amp; Fish Delivery</string>
+    <string name="auth_welcome_title">Sign in to continue</string>
+    <string name="auth_welcome_subtitle">Sign in with your Google account to save your orders and delivery addresses, or continue without signing in.</string>
+    <string name="auth_signing_in">Signing in…</string>
+    <string name="auth_continue_with_google">Continue with Google</string>
+    <string name="auth_or_divider">OR</string>
+    <string name="auth_continue_as_guest">Continue without signing in</string>
+    <string name="auth_footer_note">Safe, hygienic, and fresh cuts delivered to your doorstep.</string>
+    <string name="auth_error_cancelled">Google sign-in was cancelled. You can try again or continue without signing in.</string>
+    <string name="auth_error_no_credential">No Google account is available on this device. Please continue without signing in.</string>
+    <string name="auth_error_generic">Couldn\'t complete Google sign-in. Please check your internet connection or continue without signing in.</string>
+
+    <!-- Header & Navigation -->
+    <string name="header_add_delivery_address">Add delivery address</string>
+    <string name="header_delivering_to_format">Delivering to %1$s</string>
+    <string name="header_delivery_in_30_min">Delivery in 30 min</string>
+    <string name="header_search_placeholder_format">Search \"%1$s\"</string>
+    <string name="header_search_default_chip">Chicken</string>
     <string name="nav_home">Home</string>
     <string name="nav_categories">Categories</string>
     <string name="nav_orders">Orders</string>
     <string name="nav_profile">Profile</string>
+    <string name="sticky_cart_view_cart">View Cart</string>
+    <string name="sticky_cart_item_singular">1 Item</string>
+    <string name="sticky_cart_items_plural">%1$d Items</string>
+
+    <!-- Home & Categories -->
+    <string name="home_shop_by_category">Shop by Category</string>
+    <string name="home_bestsellers_title">Fresh Cuts &amp; Bestsellers</string>
+    <string name="home_all_cuts_title">All Fresh Cuts</string>
+    <string name="home_explore_recipes">Recipes You Can Cook</string>
+    <string name="home_customer_reviews">Customer Reviews</string>
+    <string name="category_items_count_format">%1$d Items</string>
+    <string name="category_item_single_format">1 Item</string>
+    <string name="category_empty_message">No items in this category yet</string>
+    <string name="category_back_to_home">Back to Home</string>
+    <string name="filter_all">All</string>
+    <string name="filter_boneless">Boneless</string>
+    <string name="filter_curry_cut">Curry Cut</string>
+    <string name="filter_under_250">Under ₹250</string>
+    <string name="filter_high_protein">High Protein</string>
+    <string name="filter_clear">Clear</string>
+    <string name="product_out_of_stock">Out of stock</string>
+    <string name="product_add_button">ADD</string>
+    <string name="product_off_format">%1$d%% OFF</string>
+
+    <!-- Product Detail -->
+    <string name="detail_select_budget_title">Select Your Budget</string>
+    <string name="detail_select_budget_subtitle">Adjust in ₹10 steps for automatic weight calculation</string>
+    <string name="detail_estimated_quantity_label">Estimated Quantity</string>
+    <string name="detail_approx_grams_format">Approx. %1$d g (Estimated)</string>
+    <string name="detail_price_per_kg_format">₹%1$d/kg</string>
+    <string name="detail_recommended_for_you">Recommended for you</string>
+    <string name="detail_best_value">Best Value</string>
+    <string name="detail_about_cut">About the Cut</string>
+    <string name="detail_storage_instructions">Storage Instructions</string>
+    <string name="detail_add_for_budget_format">Add for ₹%1$d</string>
+    <string name="detail_you_saved_format">You saved ₹%1$d</string>
+    <string name="detail_view_cart">View Cart</string>
+
+    <!-- Cart & Checkout -->
+    <string name="cart_title">Your Cart</string>
+    <string name="cart_empty_title">Your cart is empty</string>
+    <string name="cart_empty_subtitle">Browse fresh chicken, mutton, fish, and seafood cuts to add items to your cart.</string>
+    <string name="cart_browse_products">Browse Fresh Cuts</string>
+    <string name="cart_price_updated">Price updated</string>
+    <string name="cart_apply_coupon">Apply Coupon</string>
+    <string name="cart_coupon_placeholder">Enter coupon code</string>
+    <string name="cart_apply_btn">Apply</string>
+    <string name="cart_remove_btn">Remove</string>
+    <string name="cart_bill_summary">Bill Summary</string>
+    <string name="cart_item_total">Item Total</string>
+    <string name="cart_discount">Coupon Discount</string>
+    <string name="cart_delivery_fee">Delivery fee</string>
+    <string name="cart_handling_fee">Handling fee</string>
+    <string name="cart_grand_total">To Pay</string>
+    <string name="cart_you_saved_format">You saved ₹%1$d on this order</string>
+    <string name="cart_delivery_address">Delivery Address</string>
+    <string name="cart_add_address_btn">Add Address</string>
+    <string name="cart_change_address_btn">Change</string>
+    <string name="cart_address_required_error">Please add a delivery address to place your order.</string>
+    <string name="cart_payment_method">Payment Method</string>
+    <string name="cart_cod_option">Cash on Delivery</string>
+    <string name="cart_min_order_warning_format">Add ₹%1$d more to place your order</string>
+    <string name="cart_store_closed_warning_format">We\'re closed right now. We open at %1$s.</string>
+    <string name="cart_cancellation_policy">Cancellation Policy</string>
+    <string name="cart_place_order">Place Order</string>
+    <string name="cart_placing_order">Placing Order…</string>
+
+    <!-- Location & Address Flow -->
+    <string name="location_disclosure_title">Allow location access?</string>
+    <string name="location_disclosure_message">FRESCUT uses your location to check if we deliver to you and to fill in your address. We only use it when you ask us to.</string>
+    <string name="location_disclosure_allow">Allow</string>
+    <string name="location_disclosure_not_now">Not now</string>
+    <string name="location_confirm_title">Confirm your delivery location</string>
+    <string name="location_confirm_subtitle">Your order will be delivered here. You can edit the address below.</string>
+    <string name="location_confirm_btn">Confirm location</string>
+    <string name="location_change_btn">Change</string>
+    <string name="location_outside_radius">Sorry, we don\'t deliver to this location yet.</string>
+    <string name="location_change_location_btn">Change location</string>
+    <string name="location_permission_off">Location is off. You can enter your address manually.</string>
+    <string name="location_open_settings">Open settings</string>
+    <string name="location_gps_failed">Couldn\'t get your location. Please enter your address manually.</string>
+    <string name="address_use_current_location">Use current location</string>
+    <string name="address_fetching_location">Getting your location…</string>
+    <string name="address_house_flat_area_label">House / Flat / Area *</string>
+    <string name="address_house_flat_area_placeholder">e.g., Flat 402, Sunshine Apartments</string>
+    <string name="address_house_flat_area_error">Please enter your House / Flat / Area</string>
+    <string name="address_floor_label">Floor</string>
+    <string name="address_floor_placeholder">e.g., 2nd Floor (optional)</string>
+    <string name="address_landmark_label">Landmark</string>
+    <string name="address_landmark_placeholder">e.g., Near City Park (optional)</string>
+    <string name="address_save_as_label">Save as</string>
+    <string name="address_chip_home">Home</string>
+    <string name="address_chip_work">Work</string>
+    <string name="address_chip_other">Other</string>
+    <string name="address_receiver_phone_label">Receiver\'s phone *</string>
+    <string name="address_receiver_phone_placeholder">10-digit mobile number</string>
+    <string name="address_receiver_phone_error">Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9</string>
+    <string name="address_save_btn">Save Address</string>
+
+    <!-- Orders & Order Detail -->
+    <string name="orders_title">My Orders</string>
+    <string name="orders_empty_title">No orders yet</string>
+    <string name="orders_empty_subtitle">When you place an order, its status and bill details will appear here.</string>
+    <string name="orders_start_shopping">Start Shopping</string>
+    <string name="order_detail_title">Order Details</string>
+    <string name="order_detail_navigate">Navigate</string>
+    <string name="order_detail_reorder">Reorder</string>
+
+    <!-- Profile -->
+    <string name="profile_title">Profile</string>
+    <string name="profile_guest_name">Customer</string>
+    <string name="profile_edit">Edit</string>
+    <string name="profile_my_addresses">My Addresses</string>
+    <string name="profile_addresses_saved_format">%1$d saved</string>
+    <string name="profile_no_saved_address">No saved address</string>
+    <string name="profile_orders">Orders</string>
+    <string name="profile_orders_subtitle">View your past &amp; active orders</string>
+    <string name="profile_payment_methods">Payment Methods</string>
+    <string name="profile_cod_subtitle">Cash on Delivery</string>
+    <string name="profile_language">Language</string>
+    <string name="profile_language_english">English</string>
+    <string name="profile_language_coming_soon">More languages coming soon</string>
+    <string name="profile_coupons_offers">Coupons &amp; Offers</string>
+    <string name="profile_refer_earn">Refer &amp; Earn</string>
+    <string name="profile_help_support">Help &amp; Support</string>
+    <string name="profile_help_call">Call</string>
+    <string name="profile_help_whatsapp">WhatsApp</string>
+    <string name="profile_about">About</string>
+    <string name="profile_fssai_format">FSSAI Lic. No. %1$s</string>
+    <string name="profile_logout">Logout</string>
+    <string name="logout_confirm_title">Log out of FRESCUT?</string>
+    <string name="logout_confirm_cancel">Cancel</string>
+    <string name="logout_confirm_action">Log out</string>
 </resources>

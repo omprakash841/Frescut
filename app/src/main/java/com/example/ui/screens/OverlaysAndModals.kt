@@ -929,10 +929,14 @@ fun SearchOverlayScreen(
 
         Spacer(modifier = Modifier.height(6.dp))
 
+        val searchRows = remember(searchResults) {
+            searchResults.chunked(2)
+        }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Text(
@@ -947,15 +951,29 @@ fun SearchOverlayScreen(
                 )
             }
 
-            items(searchResults, key = { "search_${it.id}" }) { product ->
-                ReferenceHorizontalProductCard(
-                    product = product,
-                    quantityInCart = qtyMap[product.id] ?: 0,
-                    onCardClick = { onProductClick(product) },
-                    onAddClick = { onAddProduct(product) },
-                    onDecrementClick = { onDecrementProduct(product) },
-                    onFavoriteToggle = { onToggleFavorite(product) }
-                )
+            items(
+                items = searchRows,
+                key = { row -> "search_row_" + row.joinToString("_") { it.id } }
+            ) { rowProducts ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowProducts.forEach { product ->
+                        ReferenceHorizontalProductCard(
+                            product = product,
+                            quantityInCart = qtyMap[product.id] ?: 0,
+                            onCardClick = { onProductClick(product) },
+                            onAddClick = { onAddProduct(product) },
+                            onDecrementClick = { onDecrementProduct(product) },
+                            onFavoriteToggle = { onToggleFavorite(product) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (rowProducts.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

@@ -21,3 +21,4 @@ debug.keystore
 !gradlew.bat
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties
+!debug.keystore.base64

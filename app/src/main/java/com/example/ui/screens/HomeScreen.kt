@@ -1,22 +1,33 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -28,14 +39,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,10 +55,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -76,6 +88,9 @@ import com.example.ui.components.ReferenceVerticalProductCard
 import com.example.ui.theme.FrescutBorderLight
 import com.example.ui.theme.FrescutGold
 import com.example.ui.theme.FrescutGreenDiscount
+import com.example.ui.theme.FrescutOutlineRadius
+import com.example.ui.theme.FrescutOutlineShape
+import com.example.ui.theme.FrescutPrimaryButton
 import com.example.ui.theme.FrescutRedBright
 import com.example.ui.theme.FrescutRedDark
 import com.example.ui.theme.FrescutRedLightBg
@@ -83,7 +98,10 @@ import com.example.ui.theme.FrescutRedPrimary
 import com.example.ui.theme.FrescutRedSoftBorder
 import com.example.ui.theme.FrescutTextPrimary
 import com.example.ui.theme.FrescutTextSecondary
+import com.example.ui.theme.FrescutThinDivider
 import com.example.ui.theme.FrescutWhite
+import com.example.ui.theme.frescutOutlineContainer
+import kotlinx.coroutines.delay
 
 @Composable
 fun HomeScreen(
@@ -102,7 +120,7 @@ fun HomeScreen(
     searchPlaceholders: List<String>,
     quickCategories: List<QuickNavCategoryItem>,
     onLocationClick: () -> Unit,
-    onProClick: () -> Unit,
+    onProClick: () -> Unit = {},
     onNotificationClick: () -> Unit,
     onCartClick: () -> Unit = {},
     onSearchBarClick: () -> Unit,
@@ -116,9 +134,25 @@ fun HomeScreen(
     onApplyWelcomeCoupon: (String) -> Unit,
     onRecipeClick: (RecipeCardModel) -> Unit,
     onBottomNavVisibilityChanged: (Boolean) -> Unit = {},
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
+    onRetryLoad: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // 1. Loading State: Show full-screen structured skeleton matching the actual Home Screen layout
+    if (isLoading) {
+        HomeScreenSkeleton(modifier = modifier)
+        return
+    }
+
     val listState = rememberLazyListState()
+
+    LaunchedEffect(selectedHomeCategory) {
+        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+            listState.scrollToItem(0)
+        }
+        onBottomNavVisibilityChanged(true)
+    }
 
     ObserveSmartBottomNavScroll(
         listState = listState,
@@ -133,12 +167,21 @@ fun HomeScreen(
     }
 
     val filteredProducts = remember(products, selectedHomeCategory) {
-        if (selectedHomeCategory.equals("All", ignoreCase = true)) {
-            products
-        } else {
-            products.filter {
-                it.category.equals(selectedHomeCategory, ignoreCase = true) ||
-                    (selectedHomeCategory.equals("Fish", ignoreCase = true) && it.category.contains("Fish", ignoreCase = true))
+        when {
+            selectedHomeCategory.equals("All", ignoreCase = true) -> products
+            selectedHomeCategory.equals("Snacks", ignoreCase = true) -> {
+                products.filter {
+                    it.category.equals("Snacks", ignoreCase = true) ||
+                        it.category.equals("Sausages", ignoreCase = true) ||
+                        it.category.equals("Ready to Cook", ignoreCase = true)
+                }
+            }
+            else -> {
+                products.filter {
+                    it.category.equals(selectedHomeCategory, ignoreCase = true) ||
+                        (selectedHomeCategory.equals("Fish", ignoreCase = true) &&
+                            it.category.contains("Fish", ignoreCase = true))
+                }
             }
         }
     }
@@ -177,7 +220,6 @@ fun HomeScreen(
             .fillMaxSize()
             .background(FrescutWhite)
     ) {
-        // 1 & 2. Sticky Header (Location/Pro/Bell/Cart collapses on scroll; Search Bar + Category Nav stay sticky)
         FrescutStickyHeader(
             areaName = areaName,
             deliveryMins = deliveryMins,
@@ -197,139 +239,110 @@ fun HomeScreen(
             quickCategories = quickCategories
         )
 
-        // Scrollable Home Content underneath sticky Search + Category bar
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(FrescutWhite)
-                .testTag("home_lazy_column"),
-            contentPadding = PaddingValues(bottom = 148.dp)
-        ) {
-            // 3. Secondary Category/Content Bar when a specific category tab is active on Home
-            if (!selectedHomeCategory.equals("All", ignoreCase = true)) {
-                item(key = "secondary_category_strip") {
-                    SecondaryCategoryFilterBanner(
-                        categoryName = selectedHomeCategory,
-                        itemCount = filteredProducts.size,
-                        onResetAll = { onHomeCategorySelect("All") },
-                        onOpenFullCategory = { onOpenCategoryDetail(selectedHomeCategory) }
-                    )
-                }
+        when {
+            // 2. Error State (when data load failed and no products are available)
+            errorMessage != null && products.isEmpty() -> {
+                HomeErrorStateSection(
+                    errorMessage = errorMessage,
+                    onRetryClick = onRetryLoad,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
-            // 4. Promotional Banner Carousel (shown ONLY when at least 1 active banner exists in Firestore)
-            if (activeBanners.isNotEmpty()) {
-                item(key = "promo_banner_carousel") {
-                    PromotionalBannerCarousel(
-                        banners = activeBanners,
-                        onBannerClick = { banner ->
-                            onOpenCategoryDetail(banner.targetCategory)
-                        }
-                    )
-                }
+            // 3. Empty State (when product catalog is genuinely empty after loading)
+            products.isEmpty() -> {
+                HomeEmptyStateSection(
+                    onRefreshClick = onRetryLoad,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
-            // 5. Active Coupon Banner (read strictly from Firestore "coupons" collection where active == true)
-            val featuredCoupon = activeCoupons.firstOrNull { it.active }
-            if (featuredCoupon != null) {
-                item(key = "welcome_rewards_banner") {
-                    WelcomeRewardsBanner(
-                        coupon = featuredCoupon,
-                        onApplyCode = { onApplyWelcomeCoupon(featuredCoupon.code) }
-                    )
-                }
-            }
-
-            // 6. Category-specific Section OR "Our Current Hits" Section
-            item(key = "current_hits_section") {
-                val isSpecificCategory = !selectedHomeCategory.equals("All", ignoreCase = true)
-                val sectionTitle = if (isSpecificCategory) selectedHomeCategory else "Our Current Hits"
-                val sectionSubtitle = if (isSpecificCategory) {
-                    "${com.example.ui.theme.formatFreshCutCount(filteredProducts.size)} available"
-                } else {
-                    "Here’s what everyone’s eating!"
-                }
-                val showGridLayout = isSpecificCategory || showAllCurrentHitsGrid || currentHitsProducts.size <= 2
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    SectionHeaderRow(
-                        title = sectionTitle,
-                        subtitle = sectionSubtitle,
-                        actionText = if (isSpecificCategory) {
-                            "Subcategories"
-                        } else if (showAllCurrentHitsGrid) {
-                            "Carousel"
-                        } else {
-                            "View All"
-                        },
-                        onActionClick = {
-                            if (isSpecificCategory) {
-                                onOpenCategoryDetail(selectedHomeCategory)
-                            } else {
-                                onToggleViewAllCurrentHits(!showAllCurrentHitsGrid)
-                            }
+            // 4. Success State: Scrollable Home Content underneath sticky Search + Category bar
+            else -> {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(FrescutWhite)
+                        .testTag("home_lazy_column"),
+                    contentPadding = PaddingValues(bottom = 148.dp)
+                ) {
+                    // 3. Secondary Category/Content Bar when a specific category tab is active on Home
+                    if (!selectedHomeCategory.equals("All", ignoreCase = true)) {
+                        item(key = "secondary_category_strip") {
+                            SecondaryCategoryFilterBanner(
+                                categoryName = selectedHomeCategory,
+                                itemCount = filteredProducts.size,
+                                onResetAll = { onHomeCategorySelect("All") },
+                                onOpenFullCategory = { onOpenCategoryDetail(selectedHomeCategory) }
+                            )
                         }
-                    )
+                    }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (!showGridLayout) {
-                        // Horizontal Carousel + 2x2 featured grid preview
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(currentHitsProducts, key = { "hit_${it.id}" }) { product ->
-                                ReferenceVerticalProductCard(
-                                    product = product,
-                                    quantityInCart = qtyMap[product.id] ?: 0,
-                                    onCardClick = { onProductClick(product) },
-                                    onAddClick = { onAddProduct(product) },
-                                    onDecrementClick = { onDecrementProduct(product) },
-                                    onFavoriteToggle = { onToggleFavorite(product) },
-                                    cardWidth = 172.dp
-                                )
-                            }
-                        }
-
-                        if (currentHitsProducts.size >= 4) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                currentHitsProducts.drop(2).take(2).forEach { product ->
-                                    ReferenceVerticalProductCard(
-                                        product = product,
-                                        quantityInCart = qtyMap[product.id] ?: 0,
-                                        onCardClick = { onProductClick(product) },
-                                        onAddClick = { onAddProduct(product) },
-                                        onDecrementClick = { onDecrementProduct(product) },
-                                        onFavoriteToggle = { onToggleFavorite(product) },
-                                        cardWidth = androidx.compose.ui.unit.Dp.Unspecified,
-                                        modifier = Modifier.weight(1f)
-                                    )
+                    // 4. Promotional Banner Carousel (shown ONLY when at least 1 active banner exists in Firestore)
+                    if (activeBanners.isNotEmpty()) {
+                        item(key = "promo_banner_carousel") {
+                            PromotionalBannerCarousel(
+                                banners = activeBanners,
+                                onBannerClick = { banner ->
+                                    onOpenCategoryDetail(banner.targetCategory)
                                 }
-                            }
+                            )
                         }
-                    } else {
-                        // Full 2-Column Grid so even 1 or 2 products in a category display properly
-                        val rows = filteredProducts.chunked(2)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            rows.forEach { pair ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                    }
+
+                    // 5. Active Coupon Banner (read strictly from Firestore "coupons" collection where active == true)
+                    val featuredCoupon = activeCoupons.firstOrNull { it.active }
+                    if (featuredCoupon != null) {
+                        item(key = "welcome_rewards_banner") {
+                            WelcomeRewardsBanner(
+                                coupon = featuredCoupon,
+                                onApplyCode = { onApplyWelcomeCoupon(featuredCoupon.code) }
+                            )
+                        }
+                    }
+
+                    // 6. Category-specific Section OR "Our Current Hits" Section
+                    item(key = "current_hits_section") {
+                        val isSpecificCategory = !selectedHomeCategory.equals("All", ignoreCase = true)
+                        val sectionTitle = if (isSpecificCategory) selectedHomeCategory else "Our Current Hits"
+                        val sectionSubtitle = if (isSpecificCategory) {
+                            "${com.example.ui.theme.formatFreshCutCount(filteredProducts.size)} available"
+                        } else {
+                            "Here’s what everyone’s eating!"
+                        }
+                        val showGridLayout = isSpecificCategory || showAllCurrentHitsGrid || currentHitsProducts.size <= 2
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SectionHeaderRow(
+                                title = sectionTitle,
+                                subtitle = sectionSubtitle,
+                                actionText = if (isSpecificCategory) {
+                                    "Subcategories"
+                                } else if (showAllCurrentHitsGrid) {
+                                    "Carousel"
+                                } else {
+                                    "View All"
+                                },
+                                onActionClick = {
+                                    if (isSpecificCategory) {
+                                        onOpenCategoryDetail(selectedHomeCategory)
+                                    } else {
+                                        onToggleViewAllCurrentHits(!showAllCurrentHitsGrid)
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            if (!showGridLayout) {
+                                // Horizontal Carousel + 2x2 featured grid preview
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 14.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    pair.forEach { product ->
+                                    items(currentHitsProducts, key = { "hit_${it.id}" }) { product ->
                                         ReferenceVerticalProductCard(
                                             product = product,
                                             quantityInCart = qtyMap[product.id] ?: 0,
@@ -337,109 +350,160 @@ fun HomeScreen(
                                             onAddClick = { onAddProduct(product) },
                                             onDecrementClick = { onDecrementProduct(product) },
                                             onFavoriteToggle = { onToggleFavorite(product) },
-                                            cardWidth = androidx.compose.ui.unit.Dp.Unspecified,
-                                            modifier = Modifier.weight(1f)
+                                            cardWidth = 172.dp
                                         )
                                     }
-                                    if (pair.size == 1) {
-                                        Spacer(modifier = Modifier.weight(1f))
+                                }
+
+                                if (currentHitsProducts.size >= 4) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        currentHitsProducts.drop(2).take(2).forEach { product ->
+                                            ReferenceVerticalProductCard(
+                                                product = product,
+                                                quantityInCart = qtyMap[product.id] ?: 0,
+                                                onCardClick = { onProductClick(product) },
+                                                onAddClick = { onAddProduct(product) },
+                                                onDecrementClick = { onDecrementProduct(product) },
+                                                onFavoriteToggle = { onToggleFavorite(product) },
+                                                cardWidth = androidx.compose.ui.unit.Dp.Unspecified,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Full 2-Column Grid so even 1 or 2 products in a category display properly
+                                val rows = filteredProducts.chunked(2)
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    rows.forEach { pair ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            pair.forEach { product ->
+                                                ReferenceVerticalProductCard(
+                                                    product = product,
+                                                    quantityInCart = qtyMap[product.id] ?: 0,
+                                                    onCardClick = { onProductClick(product) },
+                                                    onAddClick = { onAddProduct(product) },
+                                                    onDecrementClick = { onDecrementProduct(product) },
+                                                    onFavoriteToggle = { onToggleFavorite(product) },
+                                                    cardWidth = androidx.compose.ui.unit.Dp.Unspecified,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                            if (pair.size == 1) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            // 7. Budget Shopping Section ("Cravings on a Budget")
-            if (budgetProducts.isNotEmpty()) {
-                item(key = "budget_shopping_section") {
-                    Spacer(modifier = Modifier.height(22.dp))
-                    SectionHeaderRow(
-                        title = "Cravings on a Budget",
-                        subtitle = "Pocket-friendly fresh cuts under ₹299",
-                        actionText = "View All",
-                        onActionClick = { onOpenCategoryDetail("Chicken") }
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(budgetProducts, key = { "budget_${it.id}" }) { product ->
-                            ReferenceVerticalProductCard(
-                                product = product,
-                                quantityInCart = qtyMap[product.id] ?: 0,
-                                onCardClick = { onProductClick(product) },
-                                onAddClick = { onAddProduct(product) },
-                                onDecrementClick = { onDecrementProduct(product) },
-                                onFavoriteToggle = { onToggleFavorite(product) },
-                                cardWidth = 168.dp
+                    // 7. Budget Shopping Section ("Cravings on a Budget")
+                    if (budgetProducts.isNotEmpty()) {
+                        item(key = "budget_shopping_section") {
+                            Spacer(modifier = Modifier.height(22.dp))
+                            SectionHeaderRow(
+                                title = "Cravings on a Budget",
+                                subtitle = "Pocket-friendly fresh cuts under ₹299",
+                                actionText = "View All",
+                                onActionClick = { onOpenCategoryDetail("Chicken") }
                             )
-                        }
-                    }
-                }
-            }
-
-            // 8. Shop by Category Section
-            item(key = "shop_by_category_section") {
-                Spacer(modifier = Modifier.height(22.dp))
-                HomeShopByCategorySection(
-                    categories = SeedData.categories,
-                    onCategoryClick = { category ->
-                        onOpenCategoryDetail(category.name)
-                    }
-                )
-            }
-
-            // 9. Recipe or Meal Inspiration Cards (shown ONLY when at least 1 active recipe exists in Firestore)
-            if (activeRecipes.isNotEmpty()) {
-                item(key = "crafted_recipes_section") {
-                    Spacer(modifier = Modifier.height(22.dp))
-                    SectionHeaderRow(
-                        title = "Crafted for Your Recipes",
-                        subtitle = "Chef-curated cuts for restaurant dishes at home",
-                        actionText = null,
-                        onActionClick = {}
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(activeRecipes, key = { it.id }) { recipe ->
-                            RecipeInspirationCard(
-                                recipe = recipe,
-                                onCardClick = { onRecipeClick(recipe) },
-                                onAddCutClick = {
-                                    val target = products.find { it.id == recipe.primaryProductId }
-                                    if (target != null) {
-                                        onAddProduct(target)
-                                    }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(budgetProducts, key = { "budget_${it.id}" }) { product ->
+                                    ReferenceVerticalProductCard(
+                                        product = product,
+                                        quantityInCart = qtyMap[product.id] ?: 0,
+                                        onCardClick = { onProductClick(product) },
+                                        onAddClick = { onAddProduct(product) },
+                                        onDecrementClick = { onDecrementProduct(product) },
+                                        onFavoriteToggle = { onToggleFavorite(product) },
+                                        cardWidth = 168.dp
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
-                }
-            }
 
-            // 10. Customer Reviews Section (shown ONLY when at least 1 active review exists in Firestore)
-            if (activeReviews.isNotEmpty()) {
-                item(key = "customer_reviews_section") {
-                    Spacer(modifier = Modifier.height(22.dp))
-                    SectionHeaderRow(
-                        title = "Customer Reviews",
-                        subtitle = "Verified customer feedback",
-                        actionText = null,
-                        onActionClick = {}
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(activeReviews, key = { it.id }) { review ->
-                            CustomerReviewCard(review = review)
+                    // 8. Shop by Category Section
+                    item(key = "shop_by_category_section") {
+                        Spacer(modifier = Modifier.height(22.dp))
+                        HomeShopByCategorySection(
+                            categories = SeedData.categories,
+                            onCategoryClick = { category ->
+                                onOpenCategoryDetail(category.name)
+                            }
+                        )
+                    }
+
+                    // 9. Recipe or Meal Inspiration Cards (shown ONLY when at least 1 active recipe exists in Firestore)
+                    if (activeRecipes.isNotEmpty()) {
+                        item(key = "crafted_recipes_section") {
+                            Spacer(modifier = Modifier.height(22.dp))
+                            SectionHeaderRow(
+                                title = "Crafted for Your Recipes",
+                                subtitle = "Chef-curated cuts for restaurant dishes at home",
+                                actionText = null,
+                                onActionClick = {}
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(activeRecipes, key = { it.id }) { recipe ->
+                                    RecipeInspirationCard(
+                                        recipe = recipe,
+                                        onCardClick = { onRecipeClick(recipe) },
+                                        onAddCutClick = {
+                                            val target = products.find { it.id == recipe.primaryProductId }
+                                            if (target != null) {
+                                                onAddProduct(target)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 10. Customer Reviews Section (shown ONLY when at least 1 active review exists in Firestore)
+                    if (activeReviews.isNotEmpty()) {
+                        item(key = "customer_reviews_section") {
+                            Spacer(modifier = Modifier.height(22.dp))
+                            SectionHeaderRow(
+                                title = "Customer Reviews",
+                                subtitle = "Verified customer feedback",
+                                actionText = null,
+                                onActionClick = {}
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(activeReviews, key = { it.id }) { review ->
+                                    CustomerReviewCard(review = review)
+                                }
+                            }
                         }
                     }
                 }
@@ -448,6 +512,601 @@ fun HomeScreen(
     }
 }
 
+/**
+ * Smooth left-to-right shimmer brush using a soft light-grey and white gradient
+ * at a consistent, non-flashing animation speed.
+ */
+@Composable
+fun rememberFrescutShimmerBrush(): Brush {
+    val transition = rememberInfiniteTransition(label = "FrescutHomeSkeletonShimmer")
+    val translateX by transition.animateFloat(
+        initialValue = -500f,
+        targetValue = 1500f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ShimmerTranslateX"
+    )
+    val shimmerColors = listOf(
+        Color(0xFFECEEEF),
+        Color(0xFFF5F6F7),
+        Color(0xFFFFFFFF),
+        Color(0xFFF5F6F7),
+        Color(0xFFECEEEF)
+    )
+    return Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateX, 0f),
+        end = Offset(translateX + 420f, 80f)
+    )
+}
+
+/**
+ * Full-Screen Skeleton Loading for the Home Screen:
+ * A. Header Skeleton (Delivery address, Delivery time, Membership badge, Search bar, Category navigation)
+ * B. Promotional Banner Skeleton (Large rounded rectangular banner + shimmer)
+ * C. Category Skeleton (Compact horizontal circular image placeholders + text labels)
+ * D. Product Section Skeleton (Section heading, subtitle, product image, name, weight, price, Add button, delivery info)
+ * E. Bottom Navigation Skeleton (Matches floating bottom navigation structure)
+ */
+@Composable
+fun HomeScreenSkeleton(
+    modifier: Modifier = Modifier
+) {
+    val shimmerBrush = rememberFrescutShimmerBrush()
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(FrescutWhite)
+            .testTag("home_skeleton_screen")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 64.dp)
+        ) {
+            // A. Header Skeleton (Address, Delivery Time, Pro Membership Badge, Icons, Search Bar & Category Nav)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(FrescutWhite)
+                    .testTag("skeleton_header_section")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+                        .background(Color(0xFFF7F8F9))
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Delivery address & delivery time placeholders
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(shimmerBrush)
+                            )
+                            Spacer(modifier = Modifier.width(7.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(128.dp)
+                                        .height(13.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(shimmerBrush)
+                                        .testTag("skeleton_delivery_address")
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .width(92.dp)
+                                        .height(11.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(shimmerBrush)
+                                        .testTag("skeleton_delivery_time")
+                                )
+                            }
+                        }
+
+                        // Notification icon placeholder
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(shimmerBrush)
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Shopping bag icon placeholder
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(shimmerBrush)
+                        )
+                    }
+
+                    // Search bar placeholder
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, FrescutBorderLight, RoundedCornerShape(12.dp))
+                            .background(shimmerBrush)
+                            .testTag("skeleton_search_bar")
+                    )
+                }
+
+                FrescutThinDivider()
+
+                // Compact Horizontal Category Navigation Placeholder (44.dp height)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val tabWidths = listOf(32.dp, 56.dp, 52.dp, 38.dp, 40.dp, 86.dp, 50.dp)
+                    tabWidths.forEachIndexed { index, tabWidth ->
+                        Column(
+                            modifier = Modifier.fillMaxHeight(),
+                            verticalArrangement = Arrangement.SpaceBetween,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(tabWidth)
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(tabWidth)
+                                    .height(2.5.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (index == 0) shimmerBrush else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)))
+                            )
+                        }
+                    }
+                }
+
+                FrescutThinDivider()
+            }
+
+            // Scrollable Body Skeleton matching exact dimensions of Home sections
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+            ) {
+                // B. Promotional Banner Skeleton
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(152.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(shimmerBrush)
+                            .testTag("skeleton_promo_banner")
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .width(16.dp)
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(shimmerBrush)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(8.dp)
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(shimmerBrush)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // C. Category Skeleton (Compact horizontal circular image placeholders + text labels)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("skeleton_category_section")
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .width(148.dp)
+                                .height(18.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(modifier = Modifier.height(5.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(190.dp)
+                                .height(12.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shimmerBrush)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        repeat(5) {
+                            Column(
+                                modifier = Modifier.width(72.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .background(shimmerBrush)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .width(54.dp)
+                                        .height(11.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(shimmerBrush)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // D. Product Section Skeleton (Heading, Subtitle, and Product Cards)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("skeleton_product_section")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Box(
+                                modifier = Modifier
+                                    .width(156.dp)
+                                    .height(19.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Spacer(modifier = Modifier.height(5.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(204.dp)
+                                    .height(12.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(58.dp)
+                                .height(15.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shimmerBrush)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        repeat(2) {
+                            ProductCardSkeletonItem(
+                                shimmerBrush = shimmerBrush,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // E. Bottom Navigation Skeleton matching existing bottom navigation structure
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(FrescutWhite)
+                .navigationBarsPadding()
+                .testTag("skeleton_bottom_nav")
+        ) {
+            FrescutThinDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(62.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(4) { index ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .padding(horizontal = 6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (index == 0) shimmerBrush else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(shimmerBrush)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(40.dp)
+                                    .height(9.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(shimmerBrush)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductCardSkeletonItem(
+    shimmerBrush: Brush,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .frescutOutlineContainer()
+    ) {
+        // Product image skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(106.dp)
+                .clip(RoundedCornerShape(topStart = FrescutOutlineRadius, topEnd = FrescutOutlineRadius))
+                .background(shimmerBrush)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 9.dp)
+        ) {
+            // Product name placeholder (2 lines)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .height(13.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush)
+            )
+            Spacer(modifier = Modifier.height(5.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.58f)
+                    .height(13.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Weight placeholder
+            Box(
+                modifier = Modifier
+                    .width(74.dp)
+                    .height(11.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Price and Add button placeholder
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(54.dp)
+                        .height(15.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(shimmerBrush)
+                )
+                Box(
+                    modifier = Modifier
+                        .width(58.dp)
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(shimmerBrush)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(7.dp))
+
+            // Delivery information placeholder
+            Box(
+                modifier = Modifier
+                    .width(88.dp)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush)
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeEmptyStateSection(
+    onRefreshClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(24.dp)
+            .testTag("home_empty_state"),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .frescutOutlineContainer()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(60.dp)
+                    .clip(CircleShape)
+                    .background(FrescutRedLightBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ShoppingBag,
+                    contentDescription = null,
+                    tint = FrescutRedBright,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "No Fresh Cuts Available Right Now",
+                color = FrescutTextPrimary,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 17.sp
+                ),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "We are restocking our chilled cuts. Tap refresh to check again.",
+                color = FrescutTextSecondary,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            FrescutPrimaryButton(
+                text = "Refresh Catalog",
+                onClick = onRefreshClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeErrorStateSection(
+    errorMessage: String,
+    onRetryClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(24.dp)
+            .testTag("home_error_state"),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .frescutOutlineContainer()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(FrescutRedLightBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = null,
+                    tint = FrescutRedBright,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "Unable to Load Fresh Cuts",
+                color = FrescutTextPrimary,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 17.sp
+                ),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = errorMessage,
+                color = FrescutTextSecondary,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            FrescutPrimaryButton(
+                text = "Try Again",
+                onClick = onRetryClick
+            )
+        }
+    }
+}
 
 @Composable
 private fun SecondaryCategoryFilterBanner(
@@ -460,9 +1119,9 @@ private fun SecondaryCategoryFilterBanner(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(FrescutOutlineShape)
             .background(FrescutRedLightBg)
-            .border(1.dp, Color(0xFFC8101E), RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0xFFC8101E), FrescutOutlineShape)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -528,7 +1187,7 @@ private fun PromotionalBannerCarousel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp),
+            .padding(top = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HorizontalPager(
@@ -810,7 +1469,6 @@ private fun WelcomeRewardsBanner(
     }
 }
 
-
 @Composable
 fun SectionHeaderRow(
     title: String,
@@ -892,7 +1550,7 @@ private fun HomeShopByCategorySection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Circular Pastel Category Avatars Row matching Home screenshot + Grid Row 2
+        // Circular Pastel Category Avatars Row matching Home screenshot
         LazyRow(
             contentPadding = PaddingValues(horizontal = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -932,7 +1590,6 @@ private fun HomeShopByCategorySection(
                             )
                         }
 
-                        // Optional Top Badge matching Screenshot 1 (e.g., DOUBT-FREE, G.O.L.D., READY BITES)
                         if (!cat.badgeText.isNullOrBlank() && cat.badgeText != "%") {
                             val isGold = cat.badgeText.contains("G.O.L.D")
                             Box(
@@ -1010,7 +1667,7 @@ private fun RecipeInspirationCard(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp),
-                    shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(50),
                     color = Color.Black.copy(alpha = 0.68f),
                     shadowElevation = 0.dp
                 ) {

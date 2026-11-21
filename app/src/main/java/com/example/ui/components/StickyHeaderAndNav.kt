@@ -98,10 +98,15 @@ import com.example.ui.theme.FrescutRedLightBg
 import com.example.ui.theme.FrescutRedPrimary
 import com.example.ui.theme.FrescutRedSoftBorder
 import com.example.ui.theme.FrescutSelectedTabUnderline
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.theme.FrescutTextPrimary
 import com.example.ui.theme.FrescutTextSecondary
 import com.example.ui.theme.FrescutThinDivider
 import com.example.ui.theme.FrescutWhite
+import com.example.ui.theme.rememberAnimationsEnabled
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
@@ -212,7 +217,7 @@ fun FrescutStickyHeader(
     selectedCategory: String,
     hasUnreadNotifications: Boolean,
     onLocationClick: () -> Unit,
-    onProClick: () -> Unit,
+    onProClick: () -> Unit = {},
     onNotificationClick: () -> Unit,
     onSearchBarClick: () -> Unit,
     onCategorySelect: (String) -> Unit,
@@ -426,7 +431,36 @@ fun FrescutStickyHeader(
 
                             Spacer(modifier = Modifier.width(6.dp))
 
-                            // Cart Icon with Item Count Badge (hidden when cart is empty)
+                            // Cart Icon with Item Count Badge (hidden when cart is empty; bounces 1.0 -> 1.25 -> 1.0 on change)
+                            val animationsEnabled = rememberAnimationsEnabled()
+                            val badgeScale = remember { Animatable(1f) }
+                            var previousCartCount by remember { mutableIntStateOf(cartCount) }
+                            LaunchedEffect(cartCount) {
+                                if (cartCount != previousCartCount && cartCount > 0) {
+                                    previousCartCount = cartCount
+                                    if (animationsEnabled) {
+                                        badgeScale.animateTo(
+                                            targetValue = 1.25f,
+                                            animationSpec = tween(
+                                                durationMillis = 110,
+                                                easing = FastOutSlowInEasing
+                                            )
+                                        )
+                                        badgeScale.animateTo(
+                                            targetValue = 1.0f,
+                                            animationSpec = tween(
+                                                durationMillis = 120,
+                                                easing = FastOutSlowInEasing
+                                            )
+                                        )
+                                    } else {
+                                        badgeScale.snapTo(1f)
+                                    }
+                                } else {
+                                    previousCartCount = cartCount
+                                }
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
@@ -446,6 +480,10 @@ fun FrescutStickyHeader(
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
                                             .offset(x = (-1).dp, y = 1.dp)
+                                            .graphicsLayer {
+                                                scaleX = badgeScale.value
+                                                scaleY = badgeScale.value
+                                            }
                                             .size(17.dp)
                                             .clip(CircleShape)
                                             .background(FrescutGold)
@@ -756,10 +794,40 @@ fun StickyCartSummaryBar(
     onViewCartClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val animationsEnabled = rememberAnimationsEnabled()
+
+    // Retain last non-zero display values during slide-out exit animation
+    var displayedCount by remember { mutableIntStateOf(itemCount.coerceAtLeast(1)) }
+    var displayedTotal by remember { mutableIntStateOf(totalAmount) }
+    var displayedSavings by remember { mutableIntStateOf(totalSavings) }
+    if (itemCount > 0) {
+        displayedCount = itemCount
+        displayedTotal = totalAmount
+        displayedSavings = totalSavings
+    }
+
     AnimatedVisibility(
         visible = itemCount > 0,
-        enter = expandVertically(tween(220)) + fadeIn(tween(180)),
-        exit = shrinkVertically(tween(200)) + fadeOut(tween(150)),
+        enter = if (animationsEnabled) {
+            slideInVertically(
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                initialOffsetY = { fullHeight -> fullHeight }
+            ) + fadeIn(
+                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+            )
+        } else {
+            EnterTransition.None
+        },
+        exit = if (animationsEnabled) {
+            slideOutVertically(
+                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                targetOffsetY = { fullHeight -> fullHeight }
+            ) + fadeOut(
+                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+            )
+        } else {
+            ExitTransition.None
+        },
         modifier = modifier
     ) {
         Surface(
@@ -796,17 +864,51 @@ fun StickyCartSummaryBar(
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
-                        Text(
-                            text = "$itemCount ${if (itemCount == 1) "item" else "items"} • ₹$totalAmount",
-                            color = FrescutWhite,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 14.5.sp
-                            )
-                        )
-                        if (totalSavings > 0) {
+                        AnimatedContent(
+                            targetState = displayedCount to displayedTotal,
+                            transitionSpec = {
+                                if (!animationsEnabled) {
+                                    EnterTransition.None togetherWith ExitTransition.None
+                                } else if (targetState.first > initialState.first || targetState.second > initialState.second) {
+                                    (slideInVertically(
+                                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                        initialOffsetY = { fullHeight -> -fullHeight / 2 }
+                                    ) + fadeIn(
+                                        animationSpec = tween(160, easing = FastOutSlowInEasing)
+                                    )) togetherWith (slideOutVertically(
+                                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                        targetOffsetY = { fullHeight -> fullHeight / 2 }
+                                    ) + fadeOut(
+                                        animationSpec = tween(150, easing = FastOutSlowInEasing)
+                                    ))
+                                } else {
+                                    (slideInVertically(
+                                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                        initialOffsetY = { fullHeight -> fullHeight / 2 }
+                                    ) + fadeIn(
+                                        animationSpec = tween(160, easing = FastOutSlowInEasing)
+                                    )) togetherWith (slideOutVertically(
+                                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                                        targetOffsetY = { fullHeight -> -fullHeight / 2 }
+                                    ) + fadeOut(
+                                        animationSpec = tween(150, easing = FastOutSlowInEasing)
+                                    ))
+                                }
+                            },
+                            label = "StickyCartCountAndTotalSlide"
+                        ) { (countVal, totalVal) ->
                             Text(
-                                text = "You save ₹$totalSavings on this order",
+                                text = "$countVal ${if (countVal == 1) "item" else "items"} • ₹$totalVal",
+                                color = FrescutWhite,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 14.5.sp
+                                )
+                            )
+                        }
+                        if (displayedSavings > 0) {
+                            Text(
+                                text = "You save ₹$displayedSavings on this order",
                                 color = FrescutGold,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,

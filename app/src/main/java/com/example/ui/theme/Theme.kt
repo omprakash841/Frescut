@@ -77,6 +77,7 @@ fun FrescutLabeledInputField(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     isError: Boolean = false,
+    errorMessage: String? = null,
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     testTag: String? = null
@@ -127,6 +128,13 @@ fun FrescutLabeledInputField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+            )
+        }
+        if (isError && !errorMessage.isNullOrBlank()) {
+            Text(
+                text = errorMessage,
+                color = FrescutFocusRed,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp)
             )
         }
     }
@@ -319,6 +327,19 @@ fun FrescutSectionBandDivider(
     )
 }
 
+@Composable
+fun FrescutSectionDivider(
+    modifier: Modifier = Modifier,
+    height: Dp = 8.dp,
+    color: Color = FrescutSectionDividerBg
+) {
+    FrescutSectionBandDivider(
+        modifier = modifier,
+        height = height,
+        color = color
+    )
+}
+
 /**
  * Common 2dp red (#C8101E) underline indicator shown beneath the selected category tab.
  */
@@ -370,12 +391,43 @@ private val FrescutColorScheme = lightColorScheme(
 )
 
 @Composable
+fun rememberAnimationsEnabled(): Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(context) {
+        val durationScale = runCatching {
+            android.provider.Settings.Global.getFloat(
+                context.contentResolver,
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+            )
+        }.getOrDefault(1f)
+        val animatorsEnabled = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            runCatching { android.animation.ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+        } else {
+            true
+        }
+        durationScale > 0f && animatorsEnabled
+    }
+}
+
+@Composable
 fun MyApplicationTheme(
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = FrescutColorScheme,
-        typography = Typography,
-        content = content
-    )
+    val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+    val cappedDensity = remember(currentDensity) {
+        androidx.compose.ui.unit.Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale.coerceIn(0.85f, 1.15f)
+        )
+    }
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides cappedDensity
+    ) {
+        MaterialTheme(
+            colorScheme = FrescutColorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

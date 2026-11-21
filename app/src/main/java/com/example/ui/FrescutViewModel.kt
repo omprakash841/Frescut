@@ -827,8 +827,9 @@ class FrescutViewModel(
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun showToast(message: String) {
-        _toastMessage.value = message
+        _toastMessage.value = null
     }
 
     fun clearToast() {

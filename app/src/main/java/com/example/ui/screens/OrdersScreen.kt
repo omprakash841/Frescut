@@ -603,6 +603,35 @@ private fun OrdersTopAppBar(
                 )
             }
 
+            val animationsEnabled = com.example.ui.theme.rememberAnimationsEnabled()
+            val badgeScale = remember { androidx.compose.animation.core.Animatable(1f) }
+            var previousCartCount by remember { androidx.compose.runtime.mutableIntStateOf(cartCount) }
+            androidx.compose.runtime.LaunchedEffect(cartCount) {
+                if (cartCount != previousCartCount && cartCount > 0) {
+                    previousCartCount = cartCount
+                    if (animationsEnabled) {
+                        badgeScale.animateTo(
+                            targetValue = 1.25f,
+                            animationSpec = androidx.compose.animation.core.tween(
+                                durationMillis = 110,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        )
+                        badgeScale.animateTo(
+                            targetValue = 1.0f,
+                            animationSpec = androidx.compose.animation.core.tween(
+                                durationMillis = 120,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        )
+                    } else {
+                        badgeScale.snapTo(1f)
+                    }
+                } else {
+                    previousCartCount = cartCount
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -622,7 +651,10 @@ private fun OrdersTopAppBar(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .offset(x = (-2).dp, y = 2.dp)
-                            .size(18.dp)
+                            .drawWithContent {
+                                drawContent()
+                            }
+                            .size(18.dp * badgeScale.value)
                             .clip(CircleShape)
                             .background(FrescutRedBright),
                         contentAlignment = Alignment.Center

@@ -44,10 +44,10 @@ function makeValidProduct(ownerId = ALICE_UID) {
   };
 }
 
-function makeValidOrder(userId = ALICE_UID) {
+function makeValidOrder(userId = ALICE_UID, orderNumber = "FC-151125-0001") {
   const now = new Date();
   return {
-    orderNumber: "#FC12848",
+    orderNumber,
     userId,
     items: [
       {
@@ -67,7 +67,7 @@ function makeValidOrder(userId = ALICE_UID) {
     deliveryInstructions: "Ring bell once",
     paymentMethod: "Cash on Delivery",
     status: "Order Placed",
-    time: "Today, 6:10 PM",
+    time: "15 Nov, 6:10 PM",
     timelineTimes: ["6:10 PM", "", "", "", ""],
     createdAt: now,
     updatedAt: now,
@@ -144,41 +144,66 @@ test("Orders: must start at Order Placed without fake rating, and can be rated l
   const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
   const guestDb = testEnv.unauthenticatedContext().firestore();
 
-  const aliceOrder = makeValidOrder(ALICE_UID);
-  await assertSucceeds(aliceDb.collection("orders").doc("FC12848").set(aliceOrder));
+  const aliceOrder = makeValidOrder(ALICE_UID, "FC-151125-0001");
+  await assertSucceeds(aliceDb.collection("orders").doc("FC-151125-0001").set(aliceOrder));
 
   // Creating an order with pre-filled rating or non-'Order Placed' status is rejected
   await assertFails(
-    aliceDb.collection("orders").doc("FC12849").set({
-      ...makeValidOrder(ALICE_UID),
+    aliceDb.collection("orders").doc("FC-151125-0002").set({
+      ...makeValidOrder(ALICE_UID, "FC-151125-0002"),
       status: "Out for Delivery",
     })
   );
   await assertFails(
-    aliceDb.collection("orders").doc("FC12850").set({
-      ...makeValidOrder(ALICE_UID),
+    aliceDb.collection("orders").doc("FC-151125-0003").set({
+      ...makeValidOrder(ALICE_UID, "FC-151125-0003"),
       rating: 5.0,
     })
   );
 
   // Alice can read and query her own orders, and rate her order later
-  await assertSucceeds(aliceDb.collection("orders").doc("FC12848").get());
+  await assertSucceeds(aliceDb.collection("orders").doc("FC-151125-0001").get());
   await assertSucceeds(aliceDb.collection("orders").where("userId", "==", ALICE_UID).get());
   await assertSucceeds(
-    aliceDb.collection("orders").doc("FC12848").update({
+    aliceDb.collection("orders").doc("FC-151125-0001").update({
       rating: 5.0,
       updatedAt: new Date(),
     })
   );
 
   // Bob cannot read or query Alice's orders
-  await assertFails(bobDb.collection("orders").doc("FC12848").get());
+  await assertFails(bobDb.collection("orders").doc("FC-151125-0001").get());
   await assertFails(bobDb.collection("orders").where("userId", "==", ALICE_UID).get());
 
   // Emulator guest can create and query their own emu_guest_* orders in Firestore
-  const guestOrder = makeValidOrder(EMU_GUEST_UID);
-  await assertSucceeds(guestDb.collection("orders").doc("FC12899").set(guestOrder));
+  const guestOrder = makeValidOrder(EMU_GUEST_UID, "FC-151125-0099");
+  await assertSucceeds(guestDb.collection("orders").doc("FC-151125-0099").set(guestOrder));
   await assertSucceeds(guestDb.collection("orders").where("userId", "==", EMU_GUEST_UID).get());
+});
+
+test("UserProfile: emu_guest and signed-in user can create and idempotently set/update their own profile", async () => {
+  const guestDb = testEnv.unauthenticatedContext().firestore();
+  const now = new Date();
+  const profilePayload = {
+    userId: EMU_GUEST_UID,
+    name: "Guest Customer",
+    email: "guest@frescut.in",
+    phone: "",
+    isProMember: false,
+    selectedPaymentMethod: "Cash on Delivery",
+    deliveryInstructions: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  await assertSucceeds(guestDb.collection("users").doc(EMU_GUEST_UID).set(profilePayload));
+  // Idempotent second set() or update() succeeds without PERMISSION_DENIED
+  await assertSucceeds(guestDb.collection("users").doc(EMU_GUEST_UID).set(profilePayload));
+  await assertSucceeds(
+    guestDb.collection("users").doc(EMU_GUEST_UID).update({
+      name: "Updated Guest",
+      updatedAt: new Date(),
+    })
+  );
 });
 
 test("Config, Banners, Coupons, Recipes, Reviews, and Categories: readable by everyone, writable only by owner", async () => {

@@ -414,7 +414,10 @@ fun CategoriesScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Vertical List of Horizontal Product Cards
+                // 2-Column Grid of Unified Product Cards
+                val productRows = remember(categoryProducts) {
+                    categoryProducts.chunked(2)
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -426,17 +429,31 @@ fun CategoriesScreen(
                         top = 4.dp,
                         bottom = 148.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(categoryProducts, key = { it.id }) { product ->
-                        ReferenceHorizontalProductCard(
-                            product = product,
-                            quantityInCart = qtyMap[product.id] ?: 0,
-                            onCardClick = { onProductClick(product) },
-                            onAddClick = { onAddProduct(product) },
-                            onDecrementClick = { onDecrementProduct(product) },
-                            onFavoriteToggle = { onToggleFavorite(product) }
-                        )
+                    items(
+                        items = productRows,
+                        key = { row -> row.joinToString("_") { it.id } }
+                    ) { rowProducts ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            rowProducts.forEach { product ->
+                                ReferenceHorizontalProductCard(
+                                    product = product,
+                                    quantityInCart = qtyMap[product.id] ?: 0,
+                                    onCardClick = { onProductClick(product) },
+                                    onAddClick = { onAddProduct(product) },
+                                    onDecrementClick = { onDecrementProduct(product) },
+                                    onFavoriteToggle = { onToggleFavorite(product) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (rowProducts.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
